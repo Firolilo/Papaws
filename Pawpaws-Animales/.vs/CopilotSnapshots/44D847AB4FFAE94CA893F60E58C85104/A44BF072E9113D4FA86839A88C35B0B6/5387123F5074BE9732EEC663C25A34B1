@@ -1,0 +1,20 @@
+﻿using System;
+using System.Text.Json.Serialization;
+
+namespace LibrosService.Models;
+
+public class Libro
+{
+    public int Id { get; set; }
+    public string Titulo { get; set; } = string.Empty;
+    public string ISBN { get; set; } = string.Empty;
+    public string Categoria { get; set; } = string.Empty;
+    public int AnioPublicacion { get; set; }
+    public int CantidadTotal { get; set; }
+    public int CantidadDisponible { get; set; }
+    public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
+
+    public int AutorId { get; set; }
+    [JsonIgnore]
+    public Autor? Autor { get; set; }
+}

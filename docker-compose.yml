@@ -1,0 +1,81 @@
+services:
+  cassandra-animales:
+    image: cassandra:4.1
+    container_name: papaws-cassandra-animales
+    hostname: cassandra-animales
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=papaws-cluster
+      - CASSANDRA_SEEDS=cassandra-animales,cassandra-consulta
+      - CASSANDRA_LISTEN_ADDRESS=cassandra-animales
+      - CASSANDRA_BROADCAST_ADDRESS=cassandra-animales
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - cassandra-animales-data:/var/lib/cassandra
+
+  cassandra-consulta:
+    image: cassandra:4.1
+    container_name: papaws-cassandra-consulta
+    hostname: cassandra-consulta
+    ports:
+      - "9142:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=papaws-cluster
+      - CASSANDRA_SEEDS=cassandra-animales,cassandra-consulta
+      - CASSANDRA_LISTEN_ADDRESS=cassandra-consulta
+      - CASSANDRA_BROADCAST_ADDRESS=cassandra-consulta
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - cassandra-consulta-data:/var/lib/cassandra
+
+  papaws-animales:
+    build:
+      context: .
+      dockerfile: Pawpaws-Animales/Dockerfile
+    container_name: papaws-animales
+    depends_on:
+      cassandra-animales:
+        condition: service_healthy
+      cassandra-consulta:
+        condition: service_healthy
+    environment:
+      - Cassandra__ContactPoints=cassandra-animales,cassandra-consulta
+      - Cassandra__Port=9042
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "8080:8080"
+
+  papaws-consulta:
+    build:
+      context: .
+      dockerfile: Pawpaws-Consulta/Dockerfile
+    container_name: papaws-consulta
+    depends_on:
+      cassandra-animales:
+        condition: service_healthy
+      cassandra-consulta:
+        condition: service_healthy
+      papaws-animales:
+        condition: service_started
+    environment:
+      - Cassandra__ContactPoints=cassandra-animales,cassandra-consulta
+      - Cassandra__Port=9042
+      - Services__AnimalesBaseUrl=http://papaws-animales:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "8081:8081"
+
+volumes:
+  cassandra-animales-data:
+  cassandra-consulta-data:

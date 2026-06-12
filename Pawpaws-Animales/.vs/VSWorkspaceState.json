@@ -1,0 +1,14 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\bin",
+    "\\Controllers",
+    "\\Data",
+    "\\DTOs",
+    "\\Migrations",
+    "\\Models",
+    "\\Services"
+  ],
+  "SelectedNode": "\\DTOs\\CrearLibroDto.cs",
+  "PreviewInSolutionExplorer": false
+}
