@@ -6,6 +6,11 @@ namespace Pawpaws.Consulta.Services;
 
 public class ConsultaService : IConsultaService
 {
+    private static readonly HashSet<string> EstadosValidos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Pendiente", "Confirmada", "Cancelada", "Completada"
+    };
+
     private readonly Cassandra.ISession _session;
     private readonly IAnimalReferenceService _animalReferenceService;
     private readonly IVeterinarioService _veterinarioService;
@@ -16,8 +21,12 @@ public class ConsultaService : IConsultaService
     private readonly PreparedStatement _selectByCodigoStatement;
     private readonly PreparedStatement _insertConsultaServicioStatement;
     private readonly PreparedStatement _selectConsultaServiciosStatement;
+    private readonly PreparedStatement _deleteConsultaServiciosStatement;
     private readonly PreparedStatement _updateDiagnosticoStatement;
     private readonly PreparedStatement _updateEstadoStatement;
+    private readonly PreparedStatement _updateFechaHoraStatement;
+    private readonly PreparedStatement _updateObservacionesStatement;
+    private readonly PreparedStatement _updateCoreStatement;
     private readonly PreparedStatement _insertConsultaProductoStatement;
     private readonly PreparedStatement _selectConsultaProductosStatement;
 
@@ -38,8 +47,12 @@ public class ConsultaService : IConsultaService
         _selectByCodigoStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id FROM consultas_by_codigo WHERE codigo = ?");
         _insertConsultaServicioStatement = _session.Prepare("INSERT INTO consulta_servicios_by_codigo (codigo, servicio_id) VALUES (?, ?)");
         _selectConsultaServiciosStatement = _session.Prepare("SELECT servicio_id FROM consulta_servicios_by_codigo WHERE codigo = ?");
+        _deleteConsultaServiciosStatement = _session.Prepare("DELETE FROM consulta_servicios_by_codigo WHERE codigo = ?");
         _updateDiagnosticoStatement = _session.Prepare("UPDATE consultas_by_codigo SET diagnostico = ?, indicaciones_seguimiento = ?, estado = ? WHERE codigo = ?");
         _updateEstadoStatement = _session.Prepare("UPDATE consultas_by_codigo SET estado = ? WHERE codigo = ?");
+        _updateFechaHoraStatement = _session.Prepare("UPDATE consultas_by_codigo SET fecha_hora = ? WHERE codigo = ?");
+        _updateObservacionesStatement = _session.Prepare("UPDATE consultas_by_codigo SET observaciones = ? WHERE codigo = ?");
+        _updateCoreStatement = _session.Prepare("UPDATE consultas_by_codigo SET fecha_hora = ?, observaciones = ? WHERE codigo = ?");
         _insertConsultaProductoStatement = _session.Prepare("INSERT INTO consulta_productos_by_codigo (codigo, producto_id, cantidad_usada) VALUES (?, ?, ?)");
         _selectConsultaProductosStatement = _session.Prepare("SELECT producto_id, cantidad_usada FROM consulta_productos_by_codigo WHERE codigo = ?");
     }
@@ -67,11 +80,17 @@ public class ConsultaService : IConsultaService
         }
 
         consulta.ServicioIds = await ObtenerServiciosAsync(codigo);
+        consulta.ProductosUsados = await ObtenerProductosUsadosAsync(codigo);
         return consulta;
     }
 
     public async Task<Pawpaws.Consulta.Models.Consulta> CrearAsync(CrearConsultaDto dto)
     {
+        if (!EstadosValidos.Contains(dto.Estado))
+        {
+            throw new InvalidOperationException($"Estado inválido. Debe ser uno de: {string.Join(", ", EstadosValidos)}.");
+        }
+
         if (!await _animalReferenceService.ExisteAnimalAsync(dto.AnimalId))
         {
             throw new InvalidOperationException("El animal asociado no existe.");
@@ -82,21 +101,7 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("El veterinario asociado no existe.");
         }
 
-        var servicios = new List<Guid>();
-        foreach (var servicioId in dto.ServicioIds.Distinct())
-        {
-            if (await _servicioService.ObtenerPorIdAsync(servicioId) is null)
-            {
-                throw new InvalidOperationException("Uno o más servicios no existen.");
-            }
-
-            servicios.Add(servicioId);
-        }
-
-        if (servicios.Count == 0)
-        {
-            throw new InvalidOperationException("Debe indicar al menos un servicio.");
-        }
+        var servicios = await ValidarYObtenerServiciosAsync(dto.ServicioIds);
 
         var consulta = new Pawpaws.Consulta.Models.Consulta
         {
@@ -119,12 +124,111 @@ public class ConsultaService : IConsultaService
         return consulta;
     }
 
+    public async Task<bool> ActualizarAsync(string codigo, ActualizarConsultaDto dto)
+    {
+        var consulta = await ObtenerPorCodigoAsync(codigo);
+        if (consulta is null)
+        {
+            return false;
+        }
+
+        if (consulta.Estado.Equals("Completada", StringComparison.OrdinalIgnoreCase) ||
+            consulta.Estado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"No se puede modificar una consulta en estado '{consulta.Estado}'.");
+        }
+
+        var servicios = await ValidarYObtenerServiciosAsync(dto.ServicioIds);
+
+        await _session.ExecuteAsync(_updateCoreStatement.Bind(dto.FechaHora, dto.Observaciones, codigo));
+
+        // Reemplazar servicios
+        await _session.ExecuteAsync(_deleteConsultaServiciosStatement.Bind(codigo));
+        foreach (var servicioId in servicios)
+        {
+            await _session.ExecuteAsync(_insertConsultaServicioStatement.Bind(codigo, servicioId));
+        }
+
+        return true;
+    }
+
+    public async Task<bool> CambiarEstadoAsync(string codigo, string nuevoEstado)
+    {
+        if (!EstadosValidos.Contains(nuevoEstado))
+        {
+            throw new InvalidOperationException($"Estado inválido. Debe ser uno de: {string.Join(", ", EstadosValidos)}.");
+        }
+
+        var consulta = await ObtenerPorCodigoAsync(codigo);
+        if (consulta is null)
+        {
+            return false;
+        }
+
+        var estadoActual = consulta.Estado;
+        var estadoNuevoNormalizado = NormalizarEstado(nuevoEstado);
+
+        if (estadoActual.Equals(estadoNuevoNormalizado, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (estadoActual.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Una consulta cancelada no puede cambiar de estado.");
+        }
+
+        if (estadoActual.Equals("Completada", StringComparison.OrdinalIgnoreCase) &&
+            !estadoNuevoNormalizado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Una consulta completada solo puede cancelarse.");
+        }
+
+        await _session.ExecuteAsync(_updateEstadoStatement.Bind(estadoNuevoNormalizado, codigo));
+        return true;
+    }
+
+    public async Task<bool> ReprogramarAsync(string codigo, DateTime nuevaFechaHora)
+    {
+        var consulta = await ObtenerPorCodigoAsync(codigo);
+        if (consulta is null)
+        {
+            return false;
+        }
+
+        if (consulta.Estado.Equals("Completada", StringComparison.OrdinalIgnoreCase) ||
+            consulta.Estado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"No se puede reprogramar una consulta en estado '{consulta.Estado}'.");
+        }
+
+        await _session.ExecuteAsync(_updateFechaHoraStatement.Bind(nuevaFechaHora, codigo));
+        return true;
+    }
+
+    public async Task<bool> ActualizarObservacionesAsync(string codigo, string observaciones)
+    {
+        var consulta = await ObtenerPorCodigoAsync(codigo);
+        if (consulta is null)
+        {
+            return false;
+        }
+
+        await _session.ExecuteAsync(_updateObservacionesStatement.Bind(observaciones, codigo));
+        return true;
+    }
+
     public async Task<bool> RegistrarDiagnosticoAsync(string codigo, string diagnostico, string indicacionesSeguimiento)
     {
         var consulta = await ObtenerPorCodigoAsync(codigo);
         if (consulta is null)
         {
             return false;
+        }
+
+        if (consulta.Estado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("No se puede registrar diagnóstico en una consulta cancelada.");
         }
 
         await _session.ExecuteAsync(_updateDiagnosticoStatement.Bind(diagnostico, indicacionesSeguimiento, "Completada", codigo));
@@ -139,6 +243,11 @@ public class ConsultaService : IConsultaService
             return false;
         }
 
+        if (consulta.Estado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("No se pueden registrar productos en una consulta cancelada.");
+        }
+
         foreach (var productoUsado in productosUsados)
         {
             if (productoUsado.CantidadUsada <= 0)
@@ -146,17 +255,37 @@ public class ConsultaService : IConsultaService
                 throw new InvalidOperationException("La cantidad usada debe ser mayor a cero.");
             }
 
-            if (await _productoService.ObtenerPorIdAsync(productoUsado.ProductoId) is null)
+            var producto = await _productoService.ObtenerPorIdAsync(productoUsado.ProductoId);
+            if (producto is null)
             {
                 throw new InvalidOperationException("Uno o más productos no existen.");
+            }
+
+            if (producto.StockDisponible < productoUsado.CantidadUsada)
+            {
+                throw new InvalidOperationException($"Stock insuficiente para '{producto.Nombre}'. Disponible: {producto.StockDisponible}.");
             }
 
             await _productoService.AjustarStockAsync(productoUsado.ProductoId, -productoUsado.CantidadUsada);
             await _session.ExecuteAsync(_insertConsultaProductoStatement.Bind(codigo, productoUsado.ProductoId, productoUsado.CantidadUsada));
         }
 
-        await _session.ExecuteAsync(_updateEstadoStatement.Bind("Completada", codigo));
+        // Marca como completada solo si no estaba ya completada/cancelada
+        if (!consulta.Estado.Equals("Completada", StringComparison.OrdinalIgnoreCase))
+        {
+            await _session.ExecuteAsync(_updateEstadoStatement.Bind("Completada", codigo));
+        }
         return true;
+    }
+
+    public async Task<List<ProductoUsadoDto>> ObtenerProductosUsadosAsync(string codigo)
+    {
+        var rows = await _session.ExecuteAsync(_selectConsultaProductosStatement.Bind(codigo));
+        return rows.Select(row => new ProductoUsadoDto
+        {
+            ProductoId = row.GetValue<Guid>("producto_id"),
+            CantidadUsada = row.GetValue<int>("cantidad_usada")
+        }).ToList();
     }
 
     private async Task<List<Guid>> ObtenerServiciosAsync(string codigo)
@@ -165,14 +294,30 @@ public class ConsultaService : IConsultaService
         return rows.Select(row => row.GetValue<Guid>("servicio_id")).ToList();
     }
 
-    private async Task<List<ProductoUsadoDto>> ObtenerProductosAsync(string codigo)
+    private async Task<List<Guid>> ValidarYObtenerServiciosAsync(List<Guid> servicioIds)
     {
-        var rows = await _session.ExecuteAsync(_selectConsultaProductosStatement.Bind(codigo));
-        return rows.Select(row => new ProductoUsadoDto
+        var servicios = new List<Guid>();
+        foreach (var servicioId in servicioIds.Distinct())
         {
-            ProductoId = row.GetValue<Guid>("producto_id"),
-            CantidadUsada = row.GetValue<int>("cantidad_usada")
-        }).ToList();
+            if (await _servicioService.ObtenerPorIdAsync(servicioId) is null)
+            {
+                throw new InvalidOperationException("Uno o más servicios no existen.");
+            }
+
+            servicios.Add(servicioId);
+        }
+
+        if (servicios.Count == 0)
+        {
+            throw new InvalidOperationException("Debe indicar al menos un servicio.");
+        }
+
+        return servicios;
+    }
+
+    private static string NormalizarEstado(string estado)
+    {
+        return EstadosValidos.First(e => e.Equals(estado, StringComparison.OrdinalIgnoreCase));
     }
 
     private static Pawpaws.Consulta.Models.Consulta MapearConsulta(Row row)

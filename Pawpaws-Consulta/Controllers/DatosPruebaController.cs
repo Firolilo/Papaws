@@ -45,6 +45,67 @@ public class ConsultasController : ControllerBase
         }
     }
 
+    [HttpPut("{codigo}")]
+    public async Task<IActionResult> Actualizar(string codigo, [FromBody] ActualizarConsultaDto dto)
+    {
+        try
+        {
+            var actualizado = await _consultaService.ActualizarAsync(codigo, dto);
+            if (!actualizado)
+                return NotFound(new { mensaje = "Consulta no encontrada." });
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
+    [HttpPut("{codigo}/estado")]
+    public async Task<IActionResult> CambiarEstado(string codigo, [FromBody] CambiarEstadoConsultaDto dto)
+    {
+        try
+        {
+            var actualizado = await _consultaService.CambiarEstadoAsync(codigo, dto.Estado);
+            if (!actualizado)
+                return NotFound(new { mensaje = "Consulta no encontrada." });
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
+    [HttpPut("{codigo}/reprogramar")]
+    public async Task<IActionResult> Reprogramar(string codigo, [FromBody] ReprogramarConsultaDto dto)
+    {
+        try
+        {
+            var actualizado = await _consultaService.ReprogramarAsync(codigo, dto.FechaHora);
+            if (!actualizado)
+                return NotFound(new { mensaje = "Consulta no encontrada." });
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
+    [HttpPut("{codigo}/observaciones")]
+    public async Task<IActionResult> ActualizarObservaciones(string codigo, [FromBody] ActualizarObservacionesDto dto)
+    {
+        var actualizado = await _consultaService.ActualizarObservacionesAsync(codigo, dto.Observaciones);
+        if (!actualizado)
+            return NotFound(new { mensaje = "Consulta no encontrada." });
+
+        return NoContent();
+    }
+
     [HttpPut("{codigo}/diagnostico")]
     public async Task<IActionResult> RegistrarDiagnostico(string codigo, [FromBody] RegistrarDiagnosticoDto dto)
     {
@@ -77,6 +138,17 @@ public class ConsultasController : ControllerBase
         {
             return BadRequest(new { mensaje = ex.Message });
         }
+    }
+
+    [HttpGet("{codigo}/productos")]
+    public async Task<IActionResult> ObtenerProductosUsados(string codigo)
+    {
+        var consulta = await _consultaService.ObtenerPorCodigoAsync(codigo);
+        if (consulta is null)
+            return NotFound(new { mensaje = "Consulta no encontrada." });
+
+        var productos = await _consultaService.ObtenerProductosUsadosAsync(codigo);
+        return Ok(productos);
     }
 }
 

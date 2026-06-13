@@ -1,3 +1,5 @@
+using Pawpaws.Consulta.DTOs;
+
 namespace Pawpaws.Consulta.Models;
 
 public class Consulta
@@ -11,4 +13,5 @@ public class Consulta
     public Guid AnimalId { get; set; }
     public Guid VeterinarioId { get; set; }
     public List<Guid> ServicioIds { get; set; } = new();
+    public List<ProductoUsadoDto> ProductosUsados { get; set; } = new();
 }

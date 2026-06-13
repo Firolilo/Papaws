@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bone-50 text-ink-700 font-sans antialiased;
+}
+
+.font-display {
+  font-family: "Fredoka", "Nunito", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.font-hand {
+  font-family: "Caveat", cursive;
+}
+
+.hand-accent {
+  @apply font-hand text-clay-500;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.paw-bg {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='%23005f73' fill-opacity='0.10'><circle cx='40' cy='42' r='5'/><circle cx='30' cy='30' r='3'/><circle cx='50' cy='30' r='3'/><circle cx='28' cy='52' r='3'/><circle cx='52' cy='52' r='3'/><circle cx='105' cy='105' r='5'/><circle cx='95' cy='93' r='3'/><circle cx='115' cy='93' r='3'/><circle cx='93' cy='115' r='3'/><circle cx='117' cy='115' r='3'/></g></svg>");
+}
+
+/* Pattern de huellitas. Va como pseudo-elemento para NO sobrescribir
+   el bg-gradient de Tailwind (ambos compiten por background-image). */
+.paw-confetti::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280'><g fill='%23ffffff' fill-opacity='0.08'><g transform='translate(40 60) rotate(-18)'><circle cy='10' r='4'/><circle cx='-9' r='2.5'/><circle cx='9' r='2.5'/><circle cx='-12' cy='10' r='2.5'/><circle cx='12' cy='10' r='2.5'/></g><g transform='translate(220 200) rotate(22)'><circle cy='10' r='4'/><circle cx='-9' r='2.5'/><circle cx='9' r='2.5'/><circle cx='-12' cy='10' r='2.5'/><circle cx='12' cy='10' r='2.5'/></g></g></svg>");
+  background-repeat: repeat;
+}
+.paw-confetti > * {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: #e9d8a6;
+  color: #001219;
+}
+
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #ee9b00;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Animación flotante para la mascota */
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+.animate-wiggle {
+  animation: wiggle 2s ease-in-out infinite;
+}
