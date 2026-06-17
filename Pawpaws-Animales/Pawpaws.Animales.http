@@ -1,6 +1,52 @@
-@LibrosService_HostAddress = http://localhost:5128
+@host = http://localhost:8080
 
-GET {{LibrosService_HostAddress}}/weatherforecast/
-Accept: application/json
+### Login — devuelve el token (admin@papaws.com / consultas@papaws.com / rescatistas@papaws.com)
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@papaws.com",
+  "password": "papaws123"
+}
+
+###
+@token = {{login.response.body.token}}
+
+### Salud (público)
+GET {{host}}/api/salud
+
+### Rescatistas (lectura: cualquier rol)
+GET {{host}}/api/rescatistas
+Authorization: Bearer {{token}}
+
+### Animales (lectura: cualquier rol)
+GET {{host}}/api/animales
+Authorization: Bearer {{token}}
+
+### Crear rescatista (Administrador o EncargadoRescatistas)
+POST {{host}}/api/rescatistas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombreCompleto": "Ana Pérez",
+  "telefonoContacto": "099123456",
+  "correoElectronico": "ana@papaws.com",
+  "organizacion": "ONG",
+  "zonaOperacion": "Norte"
+}
+
+### Crear animal (Administrador o EncargadoRescatistas)
+POST {{host}}/api/animales
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Toto",
+  "especie": "Loro",
+  "pesoActual": 0.45,
+  "rescatistaId": "00000000-0000-0000-0000-000000000000"
+}
 
 ###

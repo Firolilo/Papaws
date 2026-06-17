@@ -10,19 +10,26 @@ public class ServicioService : IServicioService
     private readonly PreparedStatement _insertStatement;
     private readonly PreparedStatement _selectAllStatement;
     private readonly PreparedStatement _selectByIdStatement;
+    private readonly PreparedStatement _updateStatement;
+    private readonly PreparedStatement _softDeleteStatement;
 
     public ServicioService(Cassandra.ISession session)
     {
         _session = session;
-        _insertStatement = _session.Prepare("INSERT INTO servicios_by_id (id, nombre, descripcion, duracion_estimadaminutos, precio_base) VALUES (?, ?, ?, ?, ?)");
-        _selectAllStatement = _session.Prepare("SELECT id, nombre, descripcion, duracion_estimadaminutos, precio_base FROM servicios_by_id");
-        _selectByIdStatement = _session.Prepare("SELECT id, nombre, descripcion, duracion_estimadaminutos, precio_base FROM servicios_by_id WHERE id = ?");
+        _insertStatement = _session.Prepare("INSERT INTO servicios_by_id (id, nombre, descripcion, duracion_estimadaminutos, precio_base, activo) VALUES (?, ?, ?, ?, ?, ?)");
+        _selectAllStatement = _session.Prepare("SELECT id, nombre, descripcion, duracion_estimadaminutos, precio_base, activo FROM servicios_by_id");
+        _selectByIdStatement = _session.Prepare("SELECT id, nombre, descripcion, duracion_estimadaminutos, precio_base, activo FROM servicios_by_id WHERE id = ?");
+        _updateStatement = _session.Prepare("UPDATE servicios_by_id SET nombre = ?, descripcion = ?, duracion_estimadaminutos = ?, precio_base = ? WHERE id = ?");
+        _softDeleteStatement = _session.Prepare("UPDATE servicios_by_id SET activo = false WHERE id = ?");
     }
 
     public async Task<List<Servicio>> ObtenerTodosAsync()
     {
         var rows = await _session.ExecuteAsync(_selectAllStatement.Bind());
-        return rows.Select(Mapear).OrderBy(servicio => servicio.Nombre).ToList();
+        return rows.Select(Mapear)
+            .Where(servicio => servicio.Activo)
+            .OrderBy(servicio => servicio.Nombre)
+            .ToList();
     }
 
     public async Task<Servicio?> ObtenerPorIdAsync(Guid id)
@@ -39,11 +46,37 @@ public class ServicioService : IServicioService
             Nombre = dto.Nombre,
             Descripcion = dto.Descripcion,
             DuracionEstimadaMinutos = dto.DuracionEstimadaMinutos,
-            PrecioBase = dto.PrecioBase
+            PrecioBase = dto.PrecioBase,
+            Activo = true
         };
 
-        await _session.ExecuteAsync(_insertStatement.Bind(servicio.Id, servicio.Nombre, servicio.Descripcion, servicio.DuracionEstimadaMinutos, servicio.PrecioBase));
+        await _session.ExecuteAsync(_insertStatement.Bind(servicio.Id, servicio.Nombre, servicio.Descripcion, servicio.DuracionEstimadaMinutos, servicio.PrecioBase, servicio.Activo));
         return servicio;
+    }
+
+    public async Task<bool> ActualizarAsync(Guid id, ActualizarServicioDto dto)
+    {
+        var actual = await ObtenerPorIdAsync(id);
+        if (actual is null || !actual.Activo)
+        {
+            return false;
+        }
+
+        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Descripcion, dto.DuracionEstimadaMinutos, dto.PrecioBase, id));
+        return true;
+    }
+
+    public async Task<bool> EliminarAsync(Guid id)
+    {
+        var actual = await ObtenerPorIdAsync(id);
+        if (actual is null || !actual.Activo)
+        {
+            return false;
+        }
+
+        // Borrado lógico: conserva la fila para no romper referencias de consultas históricas.
+        await _session.ExecuteAsync(_softDeleteStatement.Bind(id));
+        return true;
     }
 
     private static Servicio Mapear(Row row)
@@ -54,7 +87,8 @@ public class ServicioService : IServicioService
             Nombre = row.GetValue<string>("nombre"),
             Descripcion = row.GetValue<string>("descripcion"),
             DuracionEstimadaMinutos = row.GetValue<int>("duracion_estimadaminutos"),
-            PrecioBase = row.GetValue<decimal>("precio_base")
+            PrecioBase = row.GetValue<decimal>("precio_base"),
+            Activo = row.IsNull("activo") || row.GetValue<bool>("activo")
         };
     }
 }

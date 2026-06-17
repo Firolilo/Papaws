@@ -10,4 +10,5 @@ public interface IAnimalService
     Task<List<Animal>> ObtenerPorRescatistaAsync(Guid rescatistaId);
     Task<Animal> CrearAsync(CrearAnimalDto dto);
     Task<bool> ActualizarAsync(Guid id, ActualizarAnimalDto dto);
+    Task<bool> EliminarAsync(Guid id);
 }

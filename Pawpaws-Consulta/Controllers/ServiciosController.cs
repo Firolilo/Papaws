@@ -1,10 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Pawpaws.Consulta.Common;
 using Pawpaws.Consulta.DTOs;
+using Pawpaws.Consulta.Security;
 using Pawpaws.Consulta.Services;
 
 namespace Pawpaws.Consulta.Controllers;
 
 [ApiController]
+[Authorize(Roles = Roles.GestionConsultas)]
 [Route("api/servicios")]
 public class ServiciosController : ControllerBase
 {
@@ -16,9 +20,10 @@ public class ServiciosController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> ObtenerTodos()
+    public async Task<IActionResult> ObtenerTodos([FromQuery] int pagina = 1, [FromQuery] int tamano = Paginacion.TamanoPorDefecto)
     {
-        return Ok(await _servicioService.ObtenerTodosAsync());
+        var servicios = await _servicioService.ObtenerTodosAsync();
+        return Ok(servicios.ToResponse().Paginar(pagina, tamano));
     }
 
     [HttpGet("{id:guid}")]
@@ -28,13 +33,33 @@ public class ServiciosController : ControllerBase
         if (servicio is null)
             return NotFound(new { mensaje = "Servicio no encontrado." });
 
-        return Ok(servicio);
+        return Ok(servicio.ToResponse());
     }
 
     [HttpPost]
     public async Task<IActionResult> Crear(CrearServicioDto dto)
     {
         var servicio = await _servicioService.CrearAsync(dto);
-        return CreatedAtAction(nameof(ObtenerPorId), new { id = servicio.Id }, servicio);
+        return CreatedAtAction(nameof(ObtenerPorId), new { id = servicio.Id }, servicio.ToResponse());
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Actualizar(Guid id, ActualizarServicioDto dto)
+    {
+        var actualizado = await _servicioService.ActualizarAsync(id, dto);
+        if (!actualizado)
+            return NotFound(new { mensaje = "Servicio no encontrado." });
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Eliminar(Guid id)
+    {
+        var eliminado = await _servicioService.EliminarAsync(id);
+        if (!eliminado)
+            return NotFound(new { mensaje = "Servicio no encontrado." });
+
+        return NoContent();
     }
 }

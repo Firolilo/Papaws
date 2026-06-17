@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS {keyspace}.veterinarios_by_id (
     id uuid PRIMARY KEY,
     nombre_completo text,
     telefono_contacto text,
-    especialidad_principal text
+    especialidad_principal text,
+    activo boolean
 )"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS {keyspace}.servicios_by_id (
     nombre text,
     descripcion text,
     duracion_estimadaminutos int,
-    precio_base decimal
+    precio_base decimal,
+    activo boolean
 )"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
@@ -31,8 +33,14 @@ CREATE TABLE IF NOT EXISTS {keyspace}.productos_by_id (
     nombre text,
     tipo text,
     unidad_medida text,
-    stock_disponible int
+    stock_disponible int,
+    activo boolean
 )"));
+
+        // Migración para keyspaces creados antes de incorporar el borrado lógico.
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.veterinarios_by_id ADD IF NOT EXISTS activo boolean"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.servicios_by_id ADD IF NOT EXISTS activo boolean"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.productos_by_id ADD IF NOT EXISTS activo boolean"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
 CREATE TABLE IF NOT EXISTS {keyspace}.consultas_by_codigo (
@@ -59,6 +67,22 @@ CREATE TABLE IF NOT EXISTS {keyspace}.consulta_productos_by_codigo (
     producto_id uuid,
     cantidad_usada int,
     PRIMARY KEY (codigo, producto_id)
+)"));
+
+        // Tablas-puntero para consultar consultas por animal / veterinario sin ALLOW FILTERING.
+        // Guardan solo el código (inmutable), así no requieren sincronización al cambiar estado/fecha.
+        await session.ExecuteAsync(new SimpleStatement($@"
+CREATE TABLE IF NOT EXISTS {keyspace}.consulta_codigos_by_animal (
+    animal_id uuid,
+    codigo text,
+    PRIMARY KEY (animal_id, codigo)
+)"));
+
+        await session.ExecuteAsync(new SimpleStatement($@"
+CREATE TABLE IF NOT EXISTS {keyspace}.consulta_codigos_by_veterinario (
+    veterinario_id uuid,
+    codigo text,
+    PRIMARY KEY (veterinario_id, codigo)
 )"));
     }
 }

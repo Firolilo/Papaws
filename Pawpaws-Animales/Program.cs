@@ -1,12 +1,45 @@
+using System.Text;
 using Cassandra;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Pawpaws.Animales.Common;
 using Pawpaws.Animales.Data;
+using Pawpaws.Animales.Security;
 using Pawpaws.Animales.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(SwaggerJwt.Configurar);
+
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+// --- Autenticación / Autorización (JWT) ---
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+builder.Services.AddScoped<IJwtService, JwtService>();
+
+var jwtKey = builder.Configuration["Auth:Jwt:Key"] ?? throw new InvalidOperationException("Falta Auth:Jwt:Key.");
+var jwtIssuer = builder.Configuration["Auth:Jwt:Issuer"] ?? "papaws";
+var jwtAudience = builder.Configuration["Auth:Jwt:Audience"] ?? "papaws";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
@@ -45,7 +78,11 @@ builder.Services.AddScoped<IAnimalService, AnimalService>();
 builder.Services.AddScoped<IDatosPruebaService, DatosPruebaService>();
 builder.Services.AddScoped<IHealthService, HealthService>();
 
+builder.Services.AddHealthChecks().AddCheck<CassandraHealthCheck>("cassandra");
+
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -55,5 +92,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("PapawsFront");
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
 app.Run();

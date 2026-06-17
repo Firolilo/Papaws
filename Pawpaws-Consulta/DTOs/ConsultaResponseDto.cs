@@ -11,4 +11,5 @@ public class ConsultaResponseDto
     public Guid AnimalId { get; set; }
     public Guid VeterinarioId { get; set; }
     public List<Guid> ServicioIds { get; set; } = new();
+    public List<ProductoUsadoDto> ProductosUsados { get; set; } = new();
 }

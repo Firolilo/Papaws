@@ -1,5 +1,6 @@
 using Cassandra;
 using Pawpaws.Consulta.DTOs;
+using Pawpaws.Consulta.Exceptions;
 using Pawpaws.Consulta.Models;
 
 namespace Pawpaws.Consulta.Services;
@@ -29,6 +30,10 @@ public class ConsultaService : IConsultaService
     private readonly PreparedStatement _updateCoreStatement;
     private readonly PreparedStatement _insertConsultaProductoStatement;
     private readonly PreparedStatement _selectConsultaProductosStatement;
+    private readonly PreparedStatement _insertCodigoByAnimalStatement;
+    private readonly PreparedStatement _insertCodigoByVeterinarioStatement;
+    private readonly PreparedStatement _selectCodigosByAnimalStatement;
+    private readonly PreparedStatement _selectCodigosByVeterinarioStatement;
 
     public ConsultaService(
         Cassandra.ISession session,
@@ -42,7 +47,7 @@ public class ConsultaService : IConsultaService
         _veterinarioService = veterinarioService;
         _servicioService = servicioService;
         _productoService = productoService;
-        _insertConsultaStatement = _session.Prepare("INSERT INTO consultas_by_codigo (codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        _insertConsultaStatement = _session.Prepare("INSERT INTO consultas_by_codigo (codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS");
         _selectAllStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id FROM consultas_by_codigo");
         _selectByCodigoStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id FROM consultas_by_codigo WHERE codigo = ?");
         _insertConsultaServicioStatement = _session.Prepare("INSERT INTO consulta_servicios_by_codigo (codigo, servicio_id) VALUES (?, ?)");
@@ -55,17 +60,18 @@ public class ConsultaService : IConsultaService
         _updateCoreStatement = _session.Prepare("UPDATE consultas_by_codigo SET fecha_hora = ?, observaciones = ? WHERE codigo = ?");
         _insertConsultaProductoStatement = _session.Prepare("INSERT INTO consulta_productos_by_codigo (codigo, producto_id, cantidad_usada) VALUES (?, ?, ?)");
         _selectConsultaProductosStatement = _session.Prepare("SELECT producto_id, cantidad_usada FROM consulta_productos_by_codigo WHERE codigo = ?");
+        _insertCodigoByAnimalStatement = _session.Prepare("INSERT INTO consulta_codigos_by_animal (animal_id, codigo) VALUES (?, ?)");
+        _insertCodigoByVeterinarioStatement = _session.Prepare("INSERT INTO consulta_codigos_by_veterinario (veterinario_id, codigo) VALUES (?, ?)");
+        _selectCodigosByAnimalStatement = _session.Prepare("SELECT codigo FROM consulta_codigos_by_animal WHERE animal_id = ?");
+        _selectCodigosByVeterinarioStatement = _session.Prepare("SELECT codigo FROM consulta_codigos_by_veterinario WHERE veterinario_id = ?");
     }
 
     public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerTodosAsync()
     {
         var rows = await _session.ExecuteAsync(_selectAllStatement.Bind());
+        // El listado es liviano: servicios y productos usados se cargan solo en el detalle
+        // (ObtenerPorCodigoAsync) para evitar N+1 queries.
         var consultas = rows.Select(MapearConsulta).ToList();
-
-        foreach (var consulta in consultas)
-        {
-            consulta.ServicioIds = await ObtenerServiciosAsync(consulta.Codigo);
-        }
 
         return consultas.OrderBy(consulta => consulta.FechaHora).ToList();
     }
@@ -84,6 +90,34 @@ public class ConsultaService : IConsultaService
         return consulta;
     }
 
+    public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorAnimalAsync(Guid animalId)
+    {
+        var codigos = await _session.ExecuteAsync(_selectCodigosByAnimalStatement.Bind(animalId));
+        return await ObtenerLivianasPorCodigosAsync(codigos.Select(row => row.GetValue<string>("codigo")));
+    }
+
+    public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorVeterinarioAsync(Guid veterinarioId)
+    {
+        var codigos = await _session.ExecuteAsync(_selectCodigosByVeterinarioStatement.Bind(veterinarioId));
+        return await ObtenerLivianasPorCodigosAsync(codigos.Select(row => row.GetValue<string>("codigo")));
+    }
+
+    // Listado liviano (sin servicios ni productos) a partir de un conjunto de códigos.
+    private async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerLivianasPorCodigosAsync(IEnumerable<string> codigos)
+    {
+        var consultas = new List<Pawpaws.Consulta.Models.Consulta>();
+        foreach (var codigo in codigos)
+        {
+            var rows = await _session.ExecuteAsync(_selectByCodigoStatement.Bind(codigo));
+            if (rows.FirstOrDefault() is Row row)
+            {
+                consultas.Add(MapearConsulta(row));
+            }
+        }
+
+        return consultas.OrderBy(consulta => consulta.FechaHora).ToList();
+    }
+
     public async Task<Pawpaws.Consulta.Models.Consulta> CrearAsync(CrearConsultaDto dto)
     {
         if (!EstadosValidos.Contains(dto.Estado))
@@ -96,9 +130,9 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("El animal asociado no existe.");
         }
 
-        if (await _veterinarioService.ObtenerPorIdAsync(dto.VeterinarioId) is null)
+        if (await _veterinarioService.ObtenerPorIdAsync(dto.VeterinarioId) is null or { Activo: false })
         {
-            throw new InvalidOperationException("El veterinario asociado no existe.");
+            throw new InvalidOperationException("El veterinario asociado no existe o está dado de baja.");
         }
 
         var servicios = await ValidarYObtenerServiciosAsync(dto.ServicioIds);
@@ -114,12 +148,21 @@ public class ConsultaService : IConsultaService
             ServicioIds = servicios
         };
 
-        await _session.ExecuteAsync(_insertConsultaStatement.Bind(consulta.Codigo, consulta.FechaHora, consulta.Estado, consulta.Observaciones, null, null, consulta.AnimalId, consulta.VeterinarioId));
+        var resultado = await _session.ExecuteAsync(_insertConsultaStatement.Bind(consulta.Codigo, consulta.FechaHora, consulta.Estado, consulta.Observaciones, null, null, consulta.AnimalId, consulta.VeterinarioId));
+        // INSERT ... IF NOT EXISTS (LWT) devuelve [applied]=false si el código ya existía.
+        if (!resultado.First().GetValue<bool>("[applied]"))
+        {
+            throw new ConflictoException($"Ya existe una consulta con el código '{consulta.Codigo}'.");
+        }
 
         foreach (var servicioId in consulta.ServicioIds)
         {
             await _session.ExecuteAsync(_insertConsultaServicioStatement.Bind(consulta.Codigo, servicioId));
         }
+
+        // Índices de búsqueda por animal / veterinario.
+        await _session.ExecuteAsync(_insertCodigoByAnimalStatement.Bind(consulta.AnimalId, consulta.Codigo));
+        await _session.ExecuteAsync(_insertCodigoByVeterinarioStatement.Bind(consulta.VeterinarioId, consulta.Codigo));
 
         return consulta;
     }
@@ -248,6 +291,10 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("No se pueden registrar productos en una consulta cancelada.");
         }
 
+        // Agrupamos por producto: si el mismo producto viene repetido sumamos las cantidades
+        // (la tabla consulta_productos_by_codigo tiene PK (codigo, producto_id), así que un
+        // segundo INSERT sobreescribiría al primero en vez de acumular).
+        var cantidadesPorProducto = new Dictionary<Guid, int>();
         foreach (var productoUsado in productosUsados)
         {
             if (productoUsado.CantidadUsada <= 0)
@@ -255,20 +302,33 @@ public class ConsultaService : IConsultaService
                 throw new InvalidOperationException("La cantidad usada debe ser mayor a cero.");
             }
 
-            var producto = await _productoService.ObtenerPorIdAsync(productoUsado.ProductoId);
-            if (producto is null)
-            {
-                throw new InvalidOperationException("Uno o más productos no existen.");
-            }
-
-            if (producto.StockDisponible < productoUsado.CantidadUsada)
-            {
-                throw new InvalidOperationException($"Stock insuficiente para '{producto.Nombre}'. Disponible: {producto.StockDisponible}.");
-            }
-
-            await _productoService.AjustarStockAsync(productoUsado.ProductoId, -productoUsado.CantidadUsada);
-            await _session.ExecuteAsync(_insertConsultaProductoStatement.Bind(codigo, productoUsado.ProductoId, productoUsado.CantidadUsada));
+            cantidadesPorProducto[productoUsado.ProductoId] =
+                cantidadesPorProducto.GetValueOrDefault(productoUsado.ProductoId) + productoUsado.CantidadUsada;
         }
+
+        // Paso 1: validar TODO antes de tocar nada (evita descontar stock a medias si uno falla).
+        foreach (var (productoId, cantidad) in cantidadesPorProducto)
+        {
+            var producto = await _productoService.ObtenerPorIdAsync(productoId);
+            if (producto is null || !producto.Activo)
+            {
+                throw new InvalidOperationException("Uno o más productos no existen o están dados de baja.");
+            }
+
+            if (producto.StockDisponible < cantidad)
+            {
+                throw new InvalidOperationException($"Stock insuficiente para '{producto.Nombre}'. Disponible: {producto.StockDisponible}, solicitado: {cantidad}.");
+            }
+        }
+
+        // Paso 2: aplicar (descuento de stock + registro), ya validado.
+        var batch = new BatchStatement();
+        foreach (var (productoId, cantidad) in cantidadesPorProducto)
+        {
+            await _productoService.AjustarStockAsync(productoId, -cantidad);
+            batch.Add(_insertConsultaProductoStatement.Bind(codigo, productoId, cantidad));
+        }
+        await _session.ExecuteAsync(batch);
 
         // Marca como completada solo si no estaba ya completada/cancelada
         if (!consulta.Estado.Equals("Completada", StringComparison.OrdinalIgnoreCase))
@@ -299,9 +359,9 @@ public class ConsultaService : IConsultaService
         var servicios = new List<Guid>();
         foreach (var servicioId in servicioIds.Distinct())
         {
-            if (await _servicioService.ObtenerPorIdAsync(servicioId) is null)
+            if (await _servicioService.ObtenerPorIdAsync(servicioId) is null or { Activo: false })
             {
-                throw new InvalidOperationException("Uno o más servicios no existen.");
+                throw new InvalidOperationException("Uno o más servicios no existen o están dados de baja.");
             }
 
             servicios.Add(servicioId);

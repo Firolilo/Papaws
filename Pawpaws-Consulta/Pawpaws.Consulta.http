@@ -1,6 +1,48 @@
-@LibrosService_HostAddress = http://localhost:5128
+@host = http://localhost:8081
+@authHost = http://localhost:8080
 
-GET {{LibrosService_HostAddress}}/weatherforecast/
-Accept: application/json
+### Login en el servicio de Animales (emisor del token); usá admin o consultas@papaws.com
+# @name login
+POST {{authHost}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "consultas@papaws.com",
+  "password": "papaws123"
+}
+
+###
+@token = {{login.response.body.token}}
+
+### Veterinarios (Administrador o EncargadoConsultas)
+GET {{host}}/api/veterinarios
+Authorization: Bearer {{token}}
+
+### Servicios
+GET {{host}}/api/servicios
+Authorization: Bearer {{token}}
+
+### Productos
+GET {{host}}/api/productos
+Authorization: Bearer {{token}}
+
+### Consultas
+GET {{host}}/api/consultas
+Authorization: Bearer {{token}}
+
+### Crear consulta
+POST {{host}}/api/consultas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "codigo": "CONS-0001",
+  "fechaHora": "2026-06-18T10:00:00Z",
+  "estado": "Pendiente",
+  "observaciones": "Control general",
+  "animalId": "00000000-0000-0000-0000-000000000000",
+  "veterinarioId": "00000000-0000-0000-0000-000000000000",
+  "servicioIds": []
+}
 
 ###

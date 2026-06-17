@@ -10,21 +10,28 @@ public class ProductoService : IProductoService
     private readonly PreparedStatement _insertStatement;
     private readonly PreparedStatement _selectAllStatement;
     private readonly PreparedStatement _selectByIdStatement;
+    private readonly PreparedStatement _updateStatement;
     private readonly PreparedStatement _updateStockStatement;
+    private readonly PreparedStatement _softDeleteStatement;
 
     public ProductoService(Cassandra.ISession session)
     {
         _session = session;
-        _insertStatement = _session.Prepare("INSERT INTO productos_by_id (id, nombre, tipo, unidad_medida, stock_disponible) VALUES (?, ?, ?, ?, ?)");
-        _selectAllStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible FROM productos_by_id");
-        _selectByIdStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible FROM productos_by_id WHERE id = ?");
+        _insertStatement = _session.Prepare("INSERT INTO productos_by_id (id, nombre, tipo, unidad_medida, stock_disponible, activo) VALUES (?, ?, ?, ?, ?, ?)");
+        _selectAllStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, activo FROM productos_by_id");
+        _selectByIdStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, activo FROM productos_by_id WHERE id = ?");
+        _updateStatement = _session.Prepare("UPDATE productos_by_id SET nombre = ?, tipo = ?, unidad_medida = ? WHERE id = ?");
         _updateStockStatement = _session.Prepare("UPDATE productos_by_id SET stock_disponible = ? WHERE id = ?");
+        _softDeleteStatement = _session.Prepare("UPDATE productos_by_id SET activo = false WHERE id = ?");
     }
 
     public async Task<List<Producto>> ObtenerTodosAsync()
     {
         var rows = await _session.ExecuteAsync(_selectAllStatement.Bind());
-        return rows.Select(Mapear).OrderBy(producto => producto.Nombre).ToList();
+        return rows.Select(Mapear)
+            .Where(producto => producto.Activo)
+            .OrderBy(producto => producto.Nombre)
+            .ToList();
     }
 
     public async Task<Producto?> ObtenerPorIdAsync(Guid id)
@@ -41,11 +48,42 @@ public class ProductoService : IProductoService
             Nombre = dto.Nombre,
             Tipo = dto.Tipo,
             UnidadMedida = dto.UnidadMedida,
-            StockDisponible = dto.StockDisponible
+            StockDisponible = dto.StockDisponible,
+            Activo = true
         };
 
-        await _session.ExecuteAsync(_insertStatement.Bind(producto.Id, producto.Nombre, producto.Tipo, producto.UnidadMedida, producto.StockDisponible));
+        await _session.ExecuteAsync(_insertStatement.Bind(producto.Id, producto.Nombre, producto.Tipo, producto.UnidadMedida, producto.StockDisponible, producto.Activo));
         return producto;
+    }
+
+    public async Task<bool> ActualizarAsync(Guid id, ActualizarProductoDto dto)
+    {
+        var actual = await ObtenerPorIdAsync(id);
+        if (actual is null || !actual.Activo)
+        {
+            return false;
+        }
+
+        // Solo datos descriptivos: el stock se gestiona por endpoints dedicados.
+        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Tipo, dto.UnidadMedida, id));
+        return true;
+    }
+
+    public async Task<bool> EstablecerStockAsync(Guid id, int nuevoStock)
+    {
+        if (nuevoStock < 0)
+        {
+            throw new InvalidOperationException("El stock no puede ser negativo.");
+        }
+
+        var actual = await ObtenerPorIdAsync(id);
+        if (actual is null || !actual.Activo)
+        {
+            return false;
+        }
+
+        await _session.ExecuteAsync(_updateStockStatement.Bind(nuevoStock, id));
+        return true;
     }
 
     public async Task<bool> AjustarStockAsync(Guid id, int delta)
@@ -66,6 +104,19 @@ public class ProductoService : IProductoService
         return true;
     }
 
+    public async Task<bool> EliminarAsync(Guid id)
+    {
+        var actual = await ObtenerPorIdAsync(id);
+        if (actual is null || !actual.Activo)
+        {
+            return false;
+        }
+
+        // Borrado lógico: conserva la fila para no romper referencias de consultas históricas.
+        await _session.ExecuteAsync(_softDeleteStatement.Bind(id));
+        return true;
+    }
+
     private static Producto Mapear(Row row)
     {
         return new Producto
@@ -74,7 +125,8 @@ public class ProductoService : IProductoService
             Nombre = row.GetValue<string>("nombre"),
             Tipo = row.GetValue<string>("tipo"),
             UnidadMedida = row.GetValue<string>("unidad_medida"),
-            StockDisponible = row.GetValue<int>("stock_disponible")
+            StockDisponible = row.GetValue<int>("stock_disponible"),
+            Activo = row.IsNull("activo") || row.GetValue<bool>("activo")
         };
     }
 }

@@ -6,4 +6,5 @@ public class Veterinario
     public string NombreCompleto { get; set; } = string.Empty;
     public string TelefonoContacto { get; set; } = string.Empty;
     public string EspecialidadPrincipal { get; set; } = string.Empty;
+    public bool Activo { get; set; } = true;
 }

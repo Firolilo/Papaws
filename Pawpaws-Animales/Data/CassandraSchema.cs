@@ -15,8 +15,12 @@ CREATE TABLE IF NOT EXISTS {keyspace}.rescatistas_by_id (
     telefono_contacto text,
     correo_electronico text,
     organizacion text,
-    zona_operacion text
+    zona_operacion text,
+    activo boolean
 )"));
+
+        // Migración para keyspaces creados antes de incorporar el borrado lógico.
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.rescatistas_by_id ADD IF NOT EXISTS activo boolean"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
 CREATE TABLE IF NOT EXISTS {keyspace}.animales_by_id (

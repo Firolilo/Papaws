@@ -8,4 +8,5 @@ public class Rescatista
     public string CorreoElectronico { get; set; } = string.Empty;
     public string Organizacion { get; set; } = string.Empty;
     public string ZonaOperacion { get; set; } = string.Empty;
+    public bool Activo { get; set; } = true;
 }
