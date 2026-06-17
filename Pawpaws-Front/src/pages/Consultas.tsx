@@ -323,7 +323,6 @@ export function Consultas() {
 
           <Textarea
             label="Observaciones"
-            required
             value={form.observaciones}
             onChange={(e) =>
               setForm({ ...form, observaciones: e.target.value })

@@ -10,7 +10,8 @@
       "Bash(pdflatex -interaction=nonstopmode -halt-on-error funcionamiento-papaws.tex)",
       "Bash(echo \"exit: $?\")",
       "Bash(rm -f *.aux *.log *.out *.toc build.log build2.log)",
-      "Bash(rm -f *.aux *.log *.out *.toc b.log)"
+      "Bash(rm -f *.aux *.log *.out *.toc b.log)",
+      "PowerShell(dotnet build \"c:\\\\Users\\\\bruno\\\\Documentos\\\\Proyectos\\\\Papaws\\\\Pawpaws-Consulta\\\\Pawpaws.Consulta.csproj\" -nologo -clp:ErrorsOnly)"
     ],
     "additionalDirectories": [
       "C:\\Users\\bruno\\Documentos\\Proyectos\\Papaws\\docs"

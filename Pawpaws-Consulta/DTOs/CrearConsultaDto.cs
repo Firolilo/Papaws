@@ -15,9 +15,8 @@ public class CrearConsultaDto
     [StringLength(20)]
     public string Estado { get; set; } = "Pendiente";
 
-    [Required]
     [StringLength(500)]
-    public string Observaciones { get; set; } = string.Empty;
+    public string? Observaciones { get; set; }
 
     [Required]
     public Guid AnimalId { get; set; }

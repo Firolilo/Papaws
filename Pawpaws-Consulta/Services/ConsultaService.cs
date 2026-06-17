@@ -150,7 +150,7 @@ public class ConsultaService : IConsultaService
             Codigo = dto.Codigo,
             FechaHora = dto.FechaHora,
             Estado = dto.Estado,
-            Observaciones = dto.Observaciones,
+            Observaciones = dto.Observaciones ?? string.Empty,
             AnimalId = dto.AnimalId,
             VeterinarioId = dto.VeterinarioId,
             ServicioIds = servicios
