@@ -63,27 +63,35 @@ export function Dashboard() {
     productos.error ||
     consultas.error;
 
-  const stats = useMemo(() => {
+  // Consultas vigentes: se ocultan las huérfanas (su animal ya no existe).
+  const consultasVigentes = useMemo(() => {
     const cs = consultas.data ?? [];
+    if (!animales.data) return cs;
+    const ids = new Set(animales.data.map((a) => a.id));
+    return cs.filter((c) => ids.has(c.animalId));
+  }, [consultas.data, animales.data]);
+
+  const stats = useMemo(() => {
     const counts: Record<string, number> = {};
-    cs.forEach((c) => (counts[c.estado] = (counts[c.estado] ?? 0) + 1));
+    consultasVigentes.forEach((c) => (counts[c.estado] = (counts[c.estado] ?? 0) + 1));
     return {
       pendientes: counts["Pendiente"] ?? 0,
       confirmadas: counts["Confirmada"] ?? 0,
       completadas: counts["Completada"] ?? 0,
     };
-  }, [consultas.data]);
+  }, [consultasVigentes]);
 
   const proximas = useMemo(() => {
-    const cs = consultas.data ?? [];
-    return [...cs]
-      .filter((c) => c.estado !== "Cancelada")
+    return [...consultasVigentes]
+      // En el home solo se muestran las próximas (pendientes/confirmadas);
+      // canceladas y completadas se ven en la pestaña de Consultas.
+      .filter((c) => c.estado === "Pendiente" || c.estado === "Confirmada")
       .sort(
         (a, b) =>
           new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()
       )
       .slice(0, 5);
-  }, [consultas.data]);
+  }, [consultasVigentes]);
 
   const stockBajo = useMemo(
     () =>
@@ -195,7 +203,7 @@ export function Dashboard() {
                 />
                 <Metric
                   label="Consultas"
-                  value={consultas.data?.length ?? 0}
+                  value={consultasVigentes.length}
                   icon={<CalendarHeart size={18} />}
                   tone="moss"
                   href="/consultas"

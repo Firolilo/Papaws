@@ -364,7 +364,12 @@ public class ConsultaService : IConsultaService
 
     public async Task EliminarPorAnimalAsync(Guid animalId)
     {
-        foreach (var consulta in await ObtenerPorAnimalAsync(animalId))
+        // Escaneo directo de consultas_by_codigo en vez de usar el índice por animal: ese índice
+        // pudo no haberse poblado en datos antiguos, lo que dejaría consultas huérfanas. Escanear
+        // (volumen acotado) garantiza que NINGUNA consulta del animal sobreviva a su borrado.
+        var filas = await _session.ExecuteAsync(_selectAllStatement.Bind());
+        var consultas = filas.Select(MapearConsulta).Where(c => c.AnimalId == animalId).ToList();
+        foreach (var consulta in consultas)
         {
             await EliminarConsultaCompletaAsync(consulta);
         }

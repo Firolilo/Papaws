@@ -288,9 +288,17 @@ export function Reportes() {
     return Object.entries(cnt).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [animales.data]);
 
+  // Consultas vigentes: se ocultan las huérfanas (su animal ya no existe).
+  const consultasVigentes = useMemo(() => {
+    const cs = consultas.data ?? [];
+    if (!animales.data) return cs;
+    const ids = new Set(animales.data.map((a) => a.id));
+    return cs.filter((c) => ids.has(c.animalId));
+  }, [consultas.data, animales.data]);
+
   const estadoBarData = useMemo(() =>
-    ESTADOS.map((e) => ({ name: e, value: (consultas.data ?? []).filter((c) => c.estado === e).length })),
-  [consultas.data]);
+    ESTADOS.map((e) => ({ name: e, value: consultasVigentes.filter((c) => c.estado === e).length })),
+  [consultasVigentes]);
 
   const rescatistaBarData = useMemo(() => {
     const rMap = new Map((rescatistas.data ?? []).map((r) => [r.id, r]));
@@ -495,7 +503,7 @@ export function Reportes() {
           { label: "Animales",     val: animales.data?.length    ?? "…", color: "bg-moss-50 text-moss-700" },
           { label: "Rescatistas",  val: rescatistas.data ? rescatistas.data.filter((r) => !r.oculto).length : "…", color: "bg-clay-50 text-clay-500" },
           ...(puedeAccederConsultas ? [
-            { label: "Consultas",    val: consultas.data?.length  ?? "…", color: "bg-sun-300 text-ink-700" },
+            { label: "Consultas",    val: consultas.data ? consultasVigentes.length : "…", color: "bg-sun-300 text-ink-700" },
             { label: "Veterinarios", val: vets.data?.length       ?? "…", color: "bg-moss-100 text-moss-800" },
             { label: "Productos",    val: productos.data?.length  ?? "…", color: "bg-bone-100 text-ink-500" },
           ] : []),

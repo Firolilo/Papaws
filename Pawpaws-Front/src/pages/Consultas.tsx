@@ -72,12 +72,18 @@ export function Consultas() {
 
   const filtered = useMemo(() => {
     const cs = consultas.data ?? [];
-    const list = estadoFilter ? cs.filter((c) => c.estado === estadoFilter) : cs;
+    // Ocultar consultas huérfanas: su animal ya no existe (fue eliminado).
+    const conAnimal = animales.data
+      ? cs.filter((c) => animalesById[c.animalId])
+      : cs;
+    const list = estadoFilter
+      ? conAnimal.filter((c) => c.estado === estadoFilter)
+      : conAnimal;
     return [...list].sort(
       (a, b) =>
         new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime()
     );
-  }, [consultas.data, estadoFilter]);
+  }, [consultas.data, animales.data, animalesById, estadoFilter]);
 
   function openCreate() {
     setForm(emptyForm());
