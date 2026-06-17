@@ -15,6 +15,7 @@ import { Badge, CollarTag, estadoTone } from "../components/Badge";
 import { Mascot } from "../components/Mascot";
 import { PawIcon } from "../components/Logo";
 import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../auth/AuthContext";
 import {
   animalesApi,
   consultasApi,
@@ -25,12 +26,26 @@ import {
 } from "../api/endpoints";
 
 export function Dashboard() {
+  const { puedeAccederConsultas } = useAuth();
   const rescatistas = useFetch(() => rescatistasApi.list());
   const animales = useFetch(() => animalesApi.list());
-  const veterinarios = useFetch(() => veterinariosApi.list());
-  const servicios = useFetch(() => serviciosApi.list());
-  const productos = useFetch(() => productosApi.list());
-  const consultas = useFetch(() => consultasApi.list());
+  // El módulo de consultas solo es accesible para Admin / Encargado de consultas.
+  const veterinarios = useFetch(
+    () => (puedeAccederConsultas ? veterinariosApi.list() : Promise.resolve([])),
+    [puedeAccederConsultas]
+  );
+  const servicios = useFetch(
+    () => (puedeAccederConsultas ? serviciosApi.list() : Promise.resolve([])),
+    [puedeAccederConsultas]
+  );
+  const productos = useFetch(
+    () => (puedeAccederConsultas ? productosApi.list() : Promise.resolve([])),
+    [puedeAccederConsultas]
+  );
+  const consultas = useFetch(
+    () => (puedeAccederConsultas ? consultasApi.list() : Promise.resolve([])),
+    [puedeAccederConsultas]
+  );
 
   const loading =
     rescatistas.loading ||
@@ -169,43 +184,49 @@ export function Dashboard() {
               tone="clay"
               href="/rescatistas"
             />
-            <Metric
-              label="Veterinarios"
-              value={veterinarios.data?.length ?? 0}
-              icon={<Stethoscope size={18} />}
-              tone="sun"
-              href="/veterinarios"
-            />
-            <Metric
-              label="Consultas"
-              value={consultas.data?.length ?? 0}
-              icon={<CalendarHeart size={18} />}
-              tone="moss"
-              href="/consultas"
-            />
+            {puedeAccederConsultas && (
+              <>
+                <Metric
+                  label="Veterinarios"
+                  value={veterinarios.data?.length ?? 0}
+                  icon={<Stethoscope size={18} />}
+                  tone="sun"
+                  href="/veterinarios"
+                />
+                <Metric
+                  label="Consultas"
+                  value={consultas.data?.length ?? 0}
+                  icon={<CalendarHeart size={18} />}
+                  tone="moss"
+                  href="/consultas"
+                />
+              </>
+            )}
           </div>
 
           {/* ESTADO DE CONSULTAS */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-10">
-            <StateCard
-              tone="sun"
-              label="Pendientes"
-              value={stats.pendientes}
-              note="esperan confirmación"
-            />
-            <StateCard
-              tone="blue"
-              label="Confirmadas"
-              value={stats.confirmadas}
-              note="todo listo"
-            />
-            <StateCard
-              tone="moss"
-              label="Atendidas"
-              value={stats.completadas}
-              note="¡con cariño!"
-            />
-          </div>
+          {puedeAccederConsultas && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-10">
+              <StateCard
+                tone="sun"
+                label="Pendientes"
+                value={stats.pendientes}
+                note="esperan confirmación"
+              />
+              <StateCard
+                tone="blue"
+                label="Confirmadas"
+                value={stats.confirmadas}
+                note="todo listo"
+              />
+              <StateCard
+                tone="moss"
+                label="Atendidas"
+                value={stats.completadas}
+                note="¡con cariño!"
+              />
+            </div>
+          )}
 
           {/* RECIÉN RESCATADOS */}
           {recienLlegados.length > 0 && (
@@ -235,6 +256,7 @@ export function Dashboard() {
           )}
 
           {/* AGENDA + STOCK */}
+          {puedeAccederConsultas && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-10">
             <Card className="lg:col-span-3 p-6">
               <div className="flex items-baseline justify-between mb-5">
@@ -351,6 +373,7 @@ export function Dashboard() {
               )}
             </Card>
           </div>
+          )}
 
           {/* Quote */}
           <div className="relative bg-clay-50 rounded-[2rem] p-8 sm:p-10 mb-10 overflow-hidden paw-bg">
@@ -367,6 +390,7 @@ export function Dashboard() {
           </div>
 
           {/* Accesos rápidos */}
+          {puedeAccederConsultas && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <QuickAction
               to="/servicios"
@@ -381,6 +405,7 @@ export function Dashboard() {
               subtitle={`${productos.data?.length ?? 0} ítems en la despensa`}
             />
           </div>
+          )}
         </>
       )}
     </>

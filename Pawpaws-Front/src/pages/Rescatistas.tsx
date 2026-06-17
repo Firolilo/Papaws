@@ -6,6 +6,7 @@ import { Input } from "../components/Field";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../auth/AuthContext";
 import { rescatistasApi } from "../api/endpoints";
 import type { CrearRescatistaDto } from "../types";
 
@@ -18,6 +19,7 @@ const emptyForm: CrearRescatistaDto = {
 };
 
 export function Rescatistas() {
+  const { puedeGestionarAnimales } = useAuth();
   const { data, error, loading, reload } = useFetch(() =>
     rescatistasApi.list()
   );
@@ -49,9 +51,11 @@ export function Rescatistas() {
         title="Rescatistas"
         description="Personas y organizaciones que traen animales al centro. Mantén su información al día."
         actions={
-          <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
-            Nuevo rescatista
-          </Button>
+          puedeGestionarAnimales ? (
+            <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+              Nuevo rescatista
+            </Button>
+          ) : undefined
         }
       />
 
@@ -64,12 +68,14 @@ export function Rescatistas() {
             title="Sin rescatistas registrados"
             description="Comienza creando el primer rescatista para poder ingresar animales al sistema."
             action={
-              <Button
-                onClick={() => setOpen(true)}
-                icon={<Plus size={16} />}
-              >
-                Crear rescatista
-              </Button>
+              puedeGestionarAnimales ? (
+                <Button
+                  onClick={() => setOpen(true)}
+                  icon={<Plus size={16} />}
+                >
+                  Crear rescatista
+                </Button>
+              ) : undefined
             }
           />
         </Card>

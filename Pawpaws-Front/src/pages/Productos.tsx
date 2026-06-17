@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
 import { productosApi } from "../api/endpoints";
-import type { CrearProductoDto } from "../types";
+import type { CrearProductoDto, Producto } from "../types";
 
 const emptyForm: CrearProductoDto = {
   nombre: "",
@@ -20,23 +20,80 @@ const emptyForm: CrearProductoDto = {
 export function Productos() {
   const { data, error, loading, reload } = useFetch(() => productosApi.list());
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Producto | null>(null);
   const [form, setForm] = useState<CrearProductoDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm);
+    setSubmitError(null);
+    setOpen(true);
+  }
+
+  function openEdit(p: Producto) {
+    setEditing(p);
+    setForm({
+      nombre: p.nombre,
+      tipo: p.tipo,
+      unidadMedida: p.unidadMedida,
+      stockDisponible: p.stockDisponible,
+    });
+    setSubmitError(null);
+    setOpen(true);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await productosApi.create(form);
-      setForm(emptyForm);
+      if (editing) {
+        // El stock se gestiona aparte; el PUT solo cambia datos descriptivos.
+        await productosApi.update(editing.id, {
+          nombre: form.nombre,
+          tipo: form.tipo,
+          unidadMedida: form.unidadMedida,
+        });
+      } else {
+        await productosApi.create(form);
+      }
       setOpen(false);
       reload();
     } catch (err: any) {
       setSubmitError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onAjustarStock(p: Producto) {
+    const valor = window.prompt(
+      `Nuevo stock para "${p.nombre}" (${p.unidadMedida})`,
+      String(p.stockDisponible)
+    );
+    if (valor === null) return;
+    const nuevo = parseInt(valor, 10);
+    if (Number.isNaN(nuevo) || nuevo < 0) {
+      window.alert("Ingresa un número válido (0 o mayor).");
+      return;
+    }
+    try {
+      await productosApi.establecerStock(p.id, { stockDisponible: nuevo });
+      reload();
+    } catch (err: any) {
+      window.alert(err.message ?? "No se pudo actualizar el stock.");
+    }
+  }
+
+  async function onEliminar(p: Producto) {
+    if (!window.confirm(`¿Dar de baja el producto "${p.nombre}"?`)) return;
+    try {
+      await productosApi.remove(p.id);
+      reload();
+    } catch (err: any) {
+      window.alert(err.message ?? "No se pudo eliminar.");
     }
   }
 
@@ -47,7 +104,7 @@ export function Productos() {
         title="Productos"
         description="Medicamentos, insumos y materiales disponibles. El stock se ajusta al usarse en consultas."
         actions={
-          <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+          <Button onClick={openCreate} icon={<Plus size={16} />}>
             Nuevo producto
           </Button>
         }
@@ -62,7 +119,7 @@ export function Productos() {
             title="Sin productos"
             description="Agrega tu inventario para registrar lo que se usa en cada consulta."
             action={
-              <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+              <Button onClick={openCreate} icon={<Plus size={16} />}>
                 Crear producto
               </Button>
             }
@@ -81,6 +138,7 @@ export function Productos() {
                   <th className="text-left font-semibold px-5 py-3">Unidad</th>
                   <th className="text-right font-semibold px-5 py-3">Stock</th>
                   <th className="text-left font-semibold px-5 py-3">Estado</th>
+                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-moss-100">
@@ -111,6 +169,30 @@ export function Productos() {
                           <Badge tone="moss">Disponible</Badge>
                         )}
                       </td>
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onAjustarStock(p)}
+                        >
+                          Stock
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEdit(p)}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-clay-600 hover:bg-clay-50"
+                          onClick={() => onEliminar(p)}
+                        >
+                          Eliminar
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -123,8 +205,12 @@ export function Productos() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Nuevo producto"
-        subtitle="Registra un insumo, medicamento o material del inventario."
+        title={editing ? "Editar producto" : "Nuevo producto"}
+        subtitle={
+          editing
+            ? "Actualiza los datos del producto. El stock se ajusta desde la tabla."
+            : "Registra un insumo, medicamento o material del inventario."
+        }
       >
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
@@ -151,32 +237,34 @@ export function Productos() {
               }
             />
           </div>
-          <Input
-            label="Stock disponible"
-            type="number"
-            min="0"
-            required
-            value={form.stockDisponible || ""}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                stockDisponible: parseInt(e.target.value) || 0,
-              })
-            }
-          />
+          {!editing && (
+            <Input
+              label="Stock disponible"
+              type="number"
+              min="0"
+              required
+              value={form.stockDisponible || ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  stockDisponible: parseInt(e.target.value) || 0,
+                })
+              }
+            />
+          )}
 
           {submitError && <ErrorBox message={submitError} />}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Guardando…" : "Crear producto"}
+              {submitting
+                ? "Guardando…"
+                : editing
+                ? "Guardar cambios"
+                : "Crear producto"}
             </Button>
           </div>
         </form>

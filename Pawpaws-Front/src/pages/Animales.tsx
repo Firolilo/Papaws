@@ -6,6 +6,7 @@ import { Input, Select } from "../components/Field";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../auth/AuthContext";
 import { animalesApi, rescatistasApi } from "../api/endpoints";
 import type { Animal, CrearAnimalDto } from "../types";
 
@@ -17,6 +18,7 @@ const emptyForm: CrearAnimalDto = {
 };
 
 export function Animales() {
+  const { puedeGestionarAnimales } = useAuth();
   const animales = useFetch(() => animalesApi.list());
   const rescatistas = useFetch(() => rescatistasApi.list());
   const [open, setOpen] = useState(false);
@@ -90,6 +92,17 @@ export function Animales() {
     }
   }
 
+  async function onEliminar(a: Animal) {
+    if (!window.confirm(`¿Eliminar a "${a.nombre}"? Esta acción no se puede deshacer.`))
+      return;
+    try {
+      await animalesApi.remove(a.id);
+      animales.reload();
+    } catch (err: any) {
+      window.alert(err.message ?? "No se pudo eliminar.");
+    }
+  }
+
   const loading = animales.loading || rescatistas.loading;
 
   return (
@@ -99,9 +112,11 @@ export function Animales() {
         title="Animales"
         description="Cada rescate tiene una historia. Lleva el control de su especie, peso e ingreso al centro."
         actions={
-          <Button onClick={openCreate} icon={<Plus size={16} />}>
-            Ingresar animal
-          </Button>
+          puedeGestionarAnimales ? (
+            <Button onClick={openCreate} icon={<Plus size={16} />}>
+              Ingresar animal
+            </Button>
+          ) : undefined
         }
       />
 
@@ -141,9 +156,11 @@ export function Animales() {
                 title="No hay animales"
                 description="Ingresa un animal rescatado para llevar su historial clínico aquí."
                 action={
-                  <Button onClick={openCreate} icon={<Plus size={16} />}>
-                    Ingresar animal
-                  </Button>
+                  puedeGestionarAnimales ? (
+                    <Button onClick={openCreate} icon={<Plus size={16} />}>
+                      Ingresar animal
+                    </Button>
+                  ) : undefined
                 }
               />
             </Card>
@@ -199,14 +216,26 @@ export function Animales() {
                         <td className="px-5 py-3.5 text-ink-500">
                           {rescById[a.rescatistaId] ?? "—"}
                         </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openEdit(a)}
-                          >
-                            Editar
-                          </Button>
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                          {puedeGestionarAnimales && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEdit(a)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-clay-600 hover:bg-clay-50"
+                                onClick={() => onEliminar(a)}
+                              >
+                                Eliminar
+                              </Button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}

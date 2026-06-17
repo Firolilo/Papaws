@@ -3,6 +3,7 @@ import {
   CalendarHeart,
   HeartHandshake,
   Home,
+  LogOut,
   PawPrint,
   Pill,
   Stethoscope,
@@ -10,18 +11,28 @@ import {
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { Mascot } from "./Mascot";
+import { useAuth } from "../auth/AuthContext";
 
 const nav = [
-  { to: "/", label: "Inicio", icon: Home, end: true },
-  { to: "/consultas", label: "Consultas", icon: CalendarHeart },
-  { to: "/animales", label: "Animales", icon: PawPrint },
-  { to: "/rescatistas", label: "Rescatistas", icon: HeartHandshake },
-  { to: "/veterinarios", label: "Veterinarios", icon: Stethoscope },
-  { to: "/servicios", label: "Servicios", icon: Syringe },
-  { to: "/productos", label: "Inventario", icon: Pill },
+  { to: "/", label: "Inicio", icon: Home, end: true, soloConsultas: false },
+  { to: "/consultas", label: "Consultas", icon: CalendarHeart, soloConsultas: true },
+  { to: "/animales", label: "Animales", icon: PawPrint, soloConsultas: false },
+  { to: "/rescatistas", label: "Rescatistas", icon: HeartHandshake, soloConsultas: false },
+  { to: "/veterinarios", label: "Veterinarios", icon: Stethoscope, soloConsultas: true },
+  { to: "/servicios", label: "Servicios", icon: Syringe, soloConsultas: true },
+  { to: "/productos", label: "Inventario", icon: Pill, soloConsultas: true },
 ];
 
+const etiquetaRol: Record<string, string> = {
+  Administrador: "Administrador",
+  EncargadoConsultas: "Enc. de consultas",
+  EncargadoRescatistas: "Enc. de rescatistas",
+};
+
 export function Layout() {
+  const { usuario, logout, puedeAccederConsultas } = useAuth();
+  const items = nav.filter((n) => !n.soloConsultas || puedeAccederConsultas);
+
   return (
     <div className="min-h-screen flex bg-bone-50">
       <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-moss-100 bg-white sticky top-0 h-screen">
@@ -38,7 +49,7 @@ export function Layout() {
         </div>
 
         <nav className="px-3 flex-1 space-y-0.5">
-          {nav.map(({ to, label, icon: Icon, end }) => (
+          {items.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -56,6 +67,29 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {usuario && (
+          <div className="mx-3 mb-2 p-3 rounded-2xl bg-bone-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-moss-700 text-white font-display text-base flex items-center justify-center shrink-0">
+              {usuario.email.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-moss-800 truncate">
+                {usuario.email}
+              </p>
+              <p className="text-[11px] text-clay-600 font-medium">
+                {etiquetaRol[usuario.rol] ?? usuario.rol}
+              </p>
+            </div>
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              className="p-2 rounded-lg text-ink-500 hover:bg-clay-50 hover:text-clay-600 transition-colors"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
 
         <div className="m-3 p-5 rounded-xl2 bg-gradient-to-br from-moss-700 to-moss-800 text-white relative overflow-hidden paw-confetti">
           <div className="relative">
@@ -76,6 +110,15 @@ export function Layout() {
         <header className="lg:hidden border-b border-moss-100 px-5 py-3 flex items-center gap-3 bg-white sticky top-0 z-10">
           <Logo size={26} />
           <p className="font-display text-xl text-moss-800">Papaws</p>
+          {usuario && (
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              className="ml-auto p-2 rounded-lg text-ink-500 hover:bg-clay-50 hover:text-clay-600"
+            >
+              <LogOut size={18} />
+            </button>
+          )}
         </header>
         <div className="px-5 sm:px-10 lg:px-14 py-10 lg:py-14 max-w-[1280px] mx-auto">
           <Outlet />

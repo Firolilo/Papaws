@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
 import { veterinariosApi } from "../api/endpoints";
-import type { CrearVeterinarioDto } from "../types";
+import type { CrearVeterinarioDto, Veterinario } from "../types";
 
 const emptyForm: CrearVeterinarioDto = {
   nombreCompleto: "",
@@ -21,23 +21,55 @@ export function Veterinarios() {
     veterinariosApi.list()
   );
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Veterinario | null>(null);
   const [form, setForm] = useState<CrearVeterinarioDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm);
+    setSubmitError(null);
+    setOpen(true);
+  }
+
+  function openEdit(v: Veterinario) {
+    setEditing(v);
+    setForm({
+      nombreCompleto: v.nombreCompleto,
+      telefonoContacto: v.telefonoContacto,
+      especialidadPrincipal: v.especialidadPrincipal,
+    });
+    setSubmitError(null);
+    setOpen(true);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await veterinariosApi.create(form);
-      setForm(emptyForm);
+      if (editing) {
+        await veterinariosApi.update(editing.id, form);
+      } else {
+        await veterinariosApi.create(form);
+      }
       setOpen(false);
       reload();
     } catch (err: any) {
       setSubmitError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onEliminar(v: Veterinario) {
+    if (!window.confirm(`¿Dar de baja a "${v.nombreCompleto}"?`)) return;
+    try {
+      await veterinariosApi.remove(v.id);
+      reload();
+    } catch (err: any) {
+      window.alert(err.message ?? "No se pudo eliminar.");
     }
   }
 
@@ -48,7 +80,7 @@ export function Veterinarios() {
         title="Veterinarios"
         description="Profesionales que atienden cada consulta. Su especialidad guía la asignación de casos."
         actions={
-          <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+          <Button onClick={openCreate} icon={<Plus size={16} />}>
             Nuevo veterinario
           </Button>
         }
@@ -63,7 +95,7 @@ export function Veterinarios() {
             title="Aún no hay veterinarios"
             description="Necesitas registrar al equipo clínico para poder agendar consultas."
             action={
-              <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+              <Button onClick={openCreate} icon={<Plus size={16} />}>
                 Crear veterinario
               </Button>
             }
@@ -74,7 +106,7 @@ export function Veterinarios() {
       {!loading && data && data.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {data.map((v) => (
-            <Card key={v.id} className="p-5">
+            <Card key={v.id} className="p-5 flex flex-col">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-11 h-11 rounded-full bg-moss-700 text-bone-50 font-display text-lg flex items-center justify-center">
                   {v.nombreCompleto.charAt(0)}
@@ -94,6 +126,19 @@ export function Veterinarios() {
                   {v.telefonoContacto}
                 </span>
               </p>
+              <div className="flex justify-end gap-1 mt-4 pt-3 border-t border-moss-100">
+                <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
+                  Editar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-clay-600 hover:bg-clay-50"
+                  onClick={() => onEliminar(v)}
+                >
+                  Eliminar
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
@@ -102,7 +147,7 @@ export function Veterinarios() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Nuevo veterinario"
+        title={editing ? "Editar veterinario" : "Nuevo veterinario"}
         subtitle="Registra al profesional que atenderá las consultas."
       >
         <form onSubmit={onSubmit} className="space-y-4">
@@ -135,15 +180,15 @@ export function Veterinarios() {
           {submitError && <ErrorBox message={submitError} />}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Guardando…" : "Crear veterinario"}
+              {submitting
+                ? "Guardando…"
+                : editing
+                ? "Guardar cambios"
+                : "Crear veterinario"}
             </Button>
           </div>
         </form>

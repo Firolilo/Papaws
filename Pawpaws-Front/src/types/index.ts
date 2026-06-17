@@ -130,3 +130,42 @@ export interface ProductoUsadoDto {
   productoId: string;
   cantidadUsada: number;
 }
+
+// --- Actualización (PUT) ---
+export type ActualizarRescatistaDto = CrearRescatistaDto;
+export type ActualizarVeterinarioDto = CrearVeterinarioDto;
+export type ActualizarServicioDto = CrearServicioDto;
+
+export interface ActualizarProductoDto {
+  nombre: string;
+  tipo: string;
+  unidadMedida: string;
+}
+
+export interface EstablecerStockDto {
+  stockDisponible: number;
+}
+
+// --- Autenticación ---
+export type Rol = "Administrador" | "EncargadoConsultas" | "EncargadoRescatistas";
+
+export interface LoginDto {
+  email: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  token: string;
+  expiraUtc: string;
+  email: string;
+  rol: Rol;
+}
+
+// --- Paginación (forma de respuesta de los listados) ---
+export interface PaginaResultado<T> {
+  items: T[];
+  pagina: number;
+  tamano: number;
+  total: number;
+  totalPaginas: number;
+}
