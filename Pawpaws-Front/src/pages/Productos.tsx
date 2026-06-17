@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
@@ -24,6 +25,13 @@ export function Productos() {
   const [form, setForm] = useState<CrearProductoDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Producto | null>(null);
+
+  // Modal de stock
+  const [stockTarget, setStockTarget] = useState<Producto | null>(null);
+  const [stockValue, setStockValue] = useState("");
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockError, setStockError] = useState<string | null>(null);
 
   function openCreate() {
     setEditing(null);
@@ -42,6 +50,12 @@ export function Productos() {
     });
     setSubmitError(null);
     setOpen(true);
+  }
+
+  function openStock(p: Producto) {
+    setStockTarget(p);
+    setStockValue(String(p.stockDisponible));
+    setStockError(null);
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -68,32 +82,26 @@ export function Productos() {
     }
   }
 
-  async function onAjustarStock(p: Producto) {
-    const valor = window.prompt(
-      `Nuevo stock para "${p.nombre}" (${p.unidadMedida})`,
-      String(p.stockDisponible)
-    );
-    if (valor === null) return;
-    const nuevo = parseInt(valor, 10);
+  async function guardarStock(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stockTarget) return;
+    const nuevo = parseInt(stockValue, 10);
     if (Number.isNaN(nuevo) || nuevo < 0) {
-      window.alert("Ingresa un número válido (0 o mayor).");
+      setStockError("Ingresa un número válido (0 o mayor).");
       return;
     }
+    setStockSaving(true);
+    setStockError(null);
     try {
-      await productosApi.establecerStock(p.id, { stockDisponible: nuevo });
+      await productosApi.establecerStock(stockTarget.id, {
+        stockDisponible: nuevo,
+      });
+      setStockTarget(null);
       reload();
     } catch (err: any) {
-      window.alert(err.message ?? "No se pudo actualizar el stock.");
-    }
-  }
-
-  async function onEliminar(p: Producto) {
-    if (!window.confirm(`¿Dar de baja el producto "${p.nombre}"?`)) return;
-    try {
-      await productosApi.remove(p.id);
-      reload();
-    } catch (err: any) {
-      window.alert(err.message ?? "No se pudo eliminar.");
+      setStockError(err.message);
+    } finally {
+      setStockSaving(false);
     }
   }
 
@@ -173,7 +181,7 @@ export function Productos() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => onAjustarStock(p)}
+                          onClick={() => openStock(p)}
                         >
                           Stock
                         </Button>
@@ -188,7 +196,7 @@ export function Productos() {
                           size="sm"
                           variant="ghost"
                           className="text-clay-600 hover:bg-clay-50"
-                          onClick={() => onEliminar(p)}
+                          onClick={() => setToDelete(p)}
                         >
                           Eliminar
                         </Button>
@@ -202,6 +210,7 @@ export function Productos() {
         </Card>
       )}
 
+      {/* Crear / editar */}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -269,6 +278,66 @@ export function Productos() {
           </div>
         </form>
       </Modal>
+
+      {/* Ajustar stock */}
+      <Modal
+        open={!!stockTarget}
+        onClose={() => setStockTarget(null)}
+        title="Ajustar stock"
+        subtitle={
+          stockTarget
+            ? `${stockTarget.nombre} · actual: ${stockTarget.stockDisponible} ${stockTarget.unidadMedida}`
+            : undefined
+        }
+      >
+        <form onSubmit={guardarStock} className="space-y-4">
+          <Input
+            label="Nuevo stock"
+            hint={stockTarget?.unidadMedida}
+            type="number"
+            min="0"
+            required
+            autoFocus
+            value={stockValue}
+            onChange={(e) => setStockValue(e.target.value)}
+          />
+
+          {stockError && <ErrorBox message={stockError} />}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setStockTarget(null)}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={stockSaving}>
+              {stockSaving ? "Guardando…" : "Actualizar stock"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Dar de baja producto"
+        message={
+          <>
+            ¿Dar de baja el producto <strong>{toDelete?.nombre}</strong>? Dejará
+            de aparecer en el inventario.
+          </>
+        }
+        tone="danger"
+        confirmLabel="Eliminar"
+        onConfirm={async () => {
+          if (toDelete) {
+            await productosApi.remove(toDelete.id);
+            reload();
+          }
+        }}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }

@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
-import { Input, Select, Textarea } from "../components/Field";
+import { Input, Textarea } from "../components/Field";
+import { Combobox } from "../components/Combobox";
+import { ServicioPicker } from "../components/ServicioPicker";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, estadoTone } from "../components/Badge";
@@ -87,6 +89,11 @@ export function Consultas() {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
+    if (!form.animalId || !form.veterinarioId) {
+      setSubmitError("Selecciona animal y veterinario.");
+      setSubmitting(false);
+      return;
+    }
     if (form.servicioIds.length === 0) {
       setSubmitError("Selecciona al menos un servicio.");
       setSubmitting(false);
@@ -261,78 +268,51 @@ export function Consultas() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Select
+            <Combobox
               label="Animal"
-              required
               value={form.animalId}
-              onChange={(e) =>
-                setForm({ ...form, animalId: e.target.value })
-              }
-            >
-              <option value="">Selecciona…</option>
-              {(animales.data ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nombre} · {a.especie}
-                </option>
-              ))}
-            </Select>
-            <Select
+              onChange={(v) => setForm({ ...form, animalId: v })}
+              options={(animales.data ?? []).map((a) => ({
+                value: a.id,
+                label: a.nombre,
+                hint: a.especie,
+              }))}
+              placeholder="Selecciona…"
+              searchPlaceholder="Buscar animal…"
+              emptyText="No hay animales"
+            />
+            <Combobox
               label="Veterinario"
-              required
               value={form.veterinarioId}
-              onChange={(e) =>
-                setForm({ ...form, veterinarioId: e.target.value })
-              }
-            >
-              <option value="">Selecciona…</option>
-              {(veterinarios.data ?? []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nombreCompleto} · {v.especialidadPrincipal}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setForm({ ...form, veterinarioId: v })}
+              options={(veterinarios.data ?? []).map((v) => ({
+                value: v.id,
+                label: v.nombreCompleto,
+                hint: v.especialidadPrincipal,
+              }))}
+              placeholder="Selecciona…"
+              searchPlaceholder="Buscar veterinario…"
+              emptyText="No hay veterinarios"
+            />
           </div>
 
-          <Select
+          <Combobox
             label="Estado"
             value={form.estado}
-            onChange={(e) => setForm({ ...form, estado: e.target.value })}
-          >
-            {estados.map((e) => (
-              <option key={e}>{e}</option>
-            ))}
-          </Select>
+            onChange={(v) => setForm({ ...form, estado: v })}
+            options={estados.map((e) => ({ value: e, label: e }))}
+            searchPlaceholder="Buscar estado…"
+          />
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-moss-700 mb-2">
               Servicios
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {(servicios.data ?? []).map((s) => {
-                const active = form.servicioIds.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => toggleServicio(s.id)}
-                    className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
-                      active
-                        ? "bg-moss-700 border-moss-700 text-bone-50"
-                        : "bg-bone-50 border-moss-200/60 hover:border-moss-400"
-                    }`}
-                  >
-                    <p className="font-medium">{s.nombre}</p>
-                    <p
-                      className={`text-[11px] mt-0.5 ${
-                        active ? "text-bone-200/80" : "text-ink-500"
-                      }`}
-                    >
-                      {s.duracionEstimadaMinutos} min
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+            <ServicioPicker
+              servicios={servicios.data ?? []}
+              selectedIds={form.servicioIds}
+              onToggle={toggleServicio}
+            />
           </div>
 
           <Textarea

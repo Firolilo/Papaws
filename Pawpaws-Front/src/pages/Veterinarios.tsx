@@ -3,6 +3,7 @@ import { Plus, Phone } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
@@ -25,6 +26,7 @@ export function Veterinarios() {
   const [form, setForm] = useState<CrearVeterinarioDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Veterinario | null>(null);
 
   function openCreate() {
     setEditing(null);
@@ -60,16 +62,6 @@ export function Veterinarios() {
       setSubmitError(err.message);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function onEliminar(v: Veterinario) {
-    if (!window.confirm(`¿Dar de baja a "${v.nombreCompleto}"?`)) return;
-    try {
-      await veterinariosApi.remove(v.id);
-      reload();
-    } catch (err: any) {
-      window.alert(err.message ?? "No se pudo eliminar.");
     }
   }
 
@@ -134,7 +126,7 @@ export function Veterinarios() {
                   size="sm"
                   variant="ghost"
                   className="text-clay-600 hover:bg-clay-50"
-                  onClick={() => onEliminar(v)}
+                  onClick={() => setToDelete(v)}
                 >
                   Eliminar
                 </Button>
@@ -193,6 +185,26 @@ export function Veterinarios() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Dar de baja veterinario"
+        message={
+          <>
+            ¿Dar de baja a <strong>{toDelete?.nombreCompleto}</strong>? Dejará de
+            aparecer en los listados.
+          </>
+        }
+        tone="danger"
+        confirmLabel="Eliminar"
+        onConfirm={async () => {
+          if (toDelete) {
+            await veterinariosApi.remove(toDelete.id);
+            reload();
+          }
+        }}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }

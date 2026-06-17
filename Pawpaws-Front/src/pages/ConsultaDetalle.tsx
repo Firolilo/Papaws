@@ -14,7 +14,10 @@ import {
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, ErrorBox, Spinner } from "../components/Card";
-import { Input, Select, Textarea } from "../components/Field";
+import { Input, Textarea } from "../components/Field";
+import { Combobox } from "../components/Combobox";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { ServicioPicker } from "../components/ServicioPicker";
 import { Modal } from "../components/Modal";
 import { Badge, estadoTone } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
@@ -91,6 +94,11 @@ export function ConsultaDetalle() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Acciones rápidas
+  const [accionError, setAccionError] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+
   useEffect(() => {
     if (consulta.data) {
       setEstadoForm(consulta.data.estado);
@@ -153,6 +161,14 @@ export function ConsultaDetalle() {
     e.preventDefault();
     if (usados.length === 0) {
       setProdError("Agrega al menos un producto.");
+      return;
+    }
+    if (usados.some((u) => !u.productoId)) {
+      setProdError("Selecciona el producto en cada fila.");
+      return;
+    }
+    if (usados.some((u) => !u.cantidadUsada || u.cantidadUsada < 1)) {
+      setProdError("La cantidad debe ser al menos 1.");
       return;
     }
     setProdSaving(true);
@@ -248,6 +264,19 @@ export function ConsultaDetalle() {
       setEditError(err.message);
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  async function confirmarConsulta() {
+    setConfirmando(true);
+    setAccionError(null);
+    try {
+      await consultasApi.cambiarEstado(decoded, { estado: "Confirmada" });
+      consulta.reload();
+    } catch (err: any) {
+      setAccionError(err.message);
+    } finally {
+      setConfirmando(false);
     }
   }
 
@@ -536,24 +565,21 @@ export function ConsultaDetalle() {
                           className="flex items-end gap-2 p-3 rounded-2xl bg-bone-100 border border-bone-200"
                         >
                           <div className="flex-1">
-                            <Select
+                            <Combobox
                               label="Producto"
                               value={p.productoId}
-                              onChange={(e) =>
-                                updateProducto(i, {
-                                  productoId: e.target.value,
-                                })
+                              onChange={(v) =>
+                                updateProducto(i, { productoId: v })
                               }
-                              required
-                            >
-                              <option value="">Selecciona…</option>
-                              {(productos.data ?? []).map((x) => (
-                                <option key={x.id} value={x.id}>
-                                  {x.nombre} ({x.stockDisponible}{" "}
-                                  {x.unidadMedida})
-                                </option>
-                              ))}
-                            </Select>
+                              options={(productos.data ?? []).map((x) => ({
+                                value: x.id,
+                                label: x.nombre,
+                                hint: `${x.stockDisponible} ${x.unidadMedida}`,
+                              }))}
+                              placeholder="Selecciona…"
+                              searchPlaceholder="Buscar producto…"
+                              emptyText="No hay productos"
+                            />
                           </div>
                           <div className="w-28">
                             <Input
@@ -620,18 +646,10 @@ export function ConsultaDetalle() {
                         size="sm"
                         className="w-full justify-center"
                         icon={<CheckCheck size={14} />}
-                        onClick={async () => {
-                          try {
-                            await consultasApi.cambiarEstado(decoded, {
-                              estado: "Confirmada",
-                            });
-                            consulta.reload();
-                          } catch (err: any) {
-                            alert(err.message);
-                          }
-                        }}
+                        disabled={confirmando}
+                        onClick={confirmarConsulta}
                       >
-                        Confirmar consulta
+                        {confirmando ? "Confirmando…" : "Confirmar consulta"}
                       </Button>
                     )}
                     <Button
@@ -639,25 +657,11 @@ export function ConsultaDetalle() {
                       variant="secondary"
                       className="w-full justify-center"
                       icon={<X size={14} />}
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            "¿Cancelar esta consulta? No podrá deshacerse."
-                          )
-                        )
-                          return;
-                        try {
-                          await consultasApi.cambiarEstado(decoded, {
-                            estado: "Cancelada",
-                          });
-                          consulta.reload();
-                        } catch (err: any) {
-                          alert(err.message);
-                        }
-                      }}
+                      onClick={() => setCancelOpen(true)}
                     >
                       Cancelar consulta
                     </Button>
+                    {accionError && <ErrorBox message={accionError} />}
                   </div>
                 </Card>
               )}
@@ -836,32 +840,11 @@ export function ConsultaDetalle() {
                 <p className="text-[12px] font-bold uppercase tracking-wider text-moss-700 mb-2 px-1">
                   Servicios
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(servicios.data ?? []).map((s) => {
-                    const active = editForm.servicioIds.includes(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => toggleEditServicio(s.id)}
-                        className={`text-left px-3 py-2.5 rounded-2xl border-2 text-sm transition-colors ${
-                          active
-                            ? "bg-moss-700 border-moss-700 text-white"
-                            : "bg-white border-bone-200 hover:border-moss-300"
-                        }`}
-                      >
-                        <p className="font-semibold">{s.nombre}</p>
-                        <p
-                          className={`text-[11px] mt-0.5 ${
-                            active ? "text-bone-100" : "text-ink-500"
-                          }`}
-                        >
-                          {s.duracionEstimadaMinutos} min
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
+                <ServicioPicker
+                  servicios={servicios.data ?? []}
+                  selectedIds={editForm.servicioIds}
+                  onToggle={toggleEditServicio}
+                />
               </div>
               {editError && <ErrorBox message={editError} />}
               <div className="flex justify-end gap-2 pt-2">
@@ -878,6 +861,22 @@ export function ConsultaDetalle() {
               </div>
             </form>
           </Modal>
+
+          <ConfirmDialog
+            open={cancelOpen}
+            title="Cancelar consulta"
+            message="¿Cancelar esta consulta? No podrá deshacerse."
+            tone="danger"
+            confirmLabel="Cancelar consulta"
+            cancelLabel="Volver"
+            onConfirm={async () => {
+              await consultasApi.cambiarEstado(decoded, {
+                estado: "Cancelada",
+              });
+              consulta.reload();
+            }}
+            onClose={() => setCancelOpen(false)}
+          />
         </>
       )}
     </>

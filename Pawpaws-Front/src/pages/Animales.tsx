@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
-import { Input, Select } from "../components/Field";
+import { Input } from "../components/Field";
+import { Combobox } from "../components/Combobox";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
@@ -28,6 +30,7 @@ export function Animales() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [especieFilter, setEspecieFilter] = useState("");
+  const [toDelete, setToDelete] = useState<Animal | null>(null);
 
   const rescById = useMemo(
     () =>
@@ -40,6 +43,24 @@ export function Animales() {
   const especies = useMemo(
     () => Array.from(new Set((animales.data ?? []).map((a) => a.especie))),
     [animales.data]
+  );
+
+  const especieOptions = useMemo(
+    () => [
+      { value: "", label: "Todas las especies" },
+      ...especies.map((e) => ({ value: e, label: e })),
+    ],
+    [especies]
+  );
+
+  const rescatistaOptions = useMemo(
+    () =>
+      (rescatistas.data ?? []).map((r) => ({
+        value: r.id,
+        label: r.nombreCompleto,
+        hint: r.organizacion,
+      })),
+    [rescatistas.data]
   );
 
   const filtered = useMemo(() => {
@@ -75,6 +96,10 @@ export function Animales() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.rescatistaId) {
+      setSubmitError("Selecciona un rescatista.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -89,17 +114,6 @@ export function Animales() {
       setSubmitError(err.message);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function onEliminar(a: Animal) {
-    if (!window.confirm(`¿Eliminar a "${a.nombre}"? Esta acción no se puede deshacer.`))
-      return;
-    try {
-      await animalesApi.remove(a.id);
-      animales.reload();
-    } catch (err: any) {
-      window.alert(err.message ?? "No se pudo eliminar.");
     }
   }
 
@@ -138,16 +152,15 @@ export function Animales() {
                 className="w-full bg-white border border-moss-200/50 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-moss-500"
               />
             </div>
-            <select
-              value={especieFilter}
-              onChange={(e) => setEspecieFilter(e.target.value)}
-              className="bg-white border border-moss-200/50 rounded-lg px-3 py-2.5 text-sm focus:border-moss-500"
-            >
-              <option value="">Todas las especies</option>
-              {especies.map((e) => (
-                <option key={e}>{e}</option>
-              ))}
-            </select>
+            <div className="sm:w-60">
+              <Combobox
+                value={especieFilter}
+                onChange={setEspecieFilter}
+                options={especieOptions}
+                placeholder="Todas las especies"
+                searchPlaceholder="Buscar especie…"
+              />
+            </div>
           </div>
 
           {filtered.length === 0 ? (
@@ -230,7 +243,7 @@ export function Animales() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-clay-600 hover:bg-clay-50"
-                                onClick={() => onEliminar(a)}
+                                onClick={() => setToDelete(a)}
                               >
                                 Eliminar
                               </Button>
@@ -288,30 +301,20 @@ export function Animales() {
               }
             />
           </div>
-          <Select
+          <Combobox
             label="Rescatista"
-            required
             value={form.rescatistaId}
-            onChange={(e) =>
-              setForm({ ...form, rescatistaId: e.target.value })
-            }
-          >
-            <option value="">Selecciona un rescatista…</option>
-            {(rescatistas.data ?? []).map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.nombreCompleto} · {r.organizacion}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setForm({ ...form, rescatistaId: v })}
+            options={rescatistaOptions}
+            placeholder="Selecciona un rescatista…"
+            searchPlaceholder="Buscar rescatista…"
+            emptyText="No hay rescatistas"
+          />
 
           {submitError && <ErrorBox message={submitError} />}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
@@ -324,6 +327,26 @@ export function Animales() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Eliminar animal"
+        message={
+          <>
+            ¿Eliminar a <strong>{toDelete?.nombre}</strong>? Esta acción no se
+            puede deshacer.
+          </>
+        }
+        tone="danger"
+        confirmLabel="Eliminar"
+        onConfirm={async () => {
+          if (toDelete) {
+            await animalesApi.remove(toDelete.id);
+            animales.reload();
+          }
+        }}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }

@@ -3,6 +3,7 @@ import { Plus, Clock } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input, Textarea } from "../components/Field";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
@@ -29,6 +30,7 @@ export function Servicios() {
   const [form, setForm] = useState<CrearServicioDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Servicio | null>(null);
 
   function openCreate() {
     setEditing(null);
@@ -65,16 +67,6 @@ export function Servicios() {
       setSubmitError(err.message);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function onEliminar(s: Servicio) {
-    if (!window.confirm(`¿Dar de baja el servicio "${s.nombre}"?`)) return;
-    try {
-      await serviciosApi.remove(s.id);
-      reload();
-    } catch (err: any) {
-      window.alert(err.message ?? "No se pudo eliminar.");
     }
   }
 
@@ -136,7 +128,7 @@ export function Servicios() {
                     size="sm"
                     variant="ghost"
                     className="text-clay-600 hover:bg-clay-50"
-                    onClick={() => onEliminar(s)}
+                    onClick={() => setToDelete(s)}
                   >
                     Eliminar
                   </Button>
@@ -213,6 +205,26 @@ export function Servicios() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Dar de baja servicio"
+        message={
+          <>
+            ¿Dar de baja el servicio <strong>{toDelete?.nombre}</strong>? Dejará
+            de aparecer en los listados.
+          </>
+        }
+        tone="danger"
+        confirmLabel="Eliminar"
+        onConfirm={async () => {
+          if (toDelete) {
+            await serviciosApi.remove(toDelete.id);
+            reload();
+          }
+        }}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }
