@@ -11,6 +11,7 @@ import { Servicios } from "./pages/Servicios";
 import { Productos } from "./pages/Productos";
 import { Consultas } from "./pages/Consultas";
 import { ConsultaDetalle } from "./pages/ConsultaDetalle";
+import { Reportes } from "./pages/Reportes";
 
 export default function App() {
   return (
@@ -24,6 +25,9 @@ export default function App() {
             {/* Lectura de animales/rescatistas: cualquier rol autenticado */}
             <Route path="rescatistas" element={<Rescatistas />} />
             <Route path="animales" element={<Animales />} />
+
+            {/* Reportes: cualquier rol autenticado */}
+            <Route path="reportes" element={<Reportes />} />
 
             {/* Módulo de consultas: solo Administrador y Encargado de consultas */}
             <Route

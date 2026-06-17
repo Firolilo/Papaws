@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
+  BarChart2,
   CalendarHeart,
   HeartHandshake,
   Home,
@@ -21,6 +22,7 @@ const nav = [
   { to: "/veterinarios", label: "Veterinarios", icon: Stethoscope, soloConsultas: true },
   { to: "/servicios", label: "Servicios", icon: Syringe, soloConsultas: true },
   { to: "/productos", label: "Inventario", icon: Pill, soloConsultas: true },
+  { to: "/reportes", label: "Reportes", icon: BarChart2, soloConsultas: false },
 ];
 
 const etiquetaRol: Record<string, string> = {

@@ -4,6 +4,8 @@ const ANIMALES_BASE =
   import.meta.env.VITE_API_ANIMALES ?? "http://localhost:8080";
 const CONSULTA_BASE =
   import.meta.env.VITE_API_CONSULTA ?? "http://localhost:8081";
+export const REPORTES_BASE =
+  import.meta.env.VITE_API_REPORTES ?? "http://localhost:8082";
 
 export type ApiZone = "animales" | "consulta";
 

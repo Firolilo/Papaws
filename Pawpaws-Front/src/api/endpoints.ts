@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiList, apiLogin, apiPost, apiPut } from "./client";
+import { apiDelete, apiGet, apiList, apiLogin, apiPost, apiPut, REPORTES_BASE, getToken } from "./client";
 import type {
   ActualizarConsultaDto,
   ActualizarObservacionesDto,
@@ -117,4 +117,46 @@ export const consultasApi = {
     ),
   cancelar: (codigo: string) =>
     apiDelete("consulta", `/api/consultas/${codigo}`),
+};
+
+// ── Reportes (servicio independiente en :8082) ─────────────────────────────
+async function reportesGet<T>(path: string): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${REPORTES_BASE}${path}`, {
+    headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (res.status === 404) return null as T;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const data = text ? JSON.parse(text) : {};
+    throw new Error(data.title || data.mensaje || `Error ${res.status}`);
+  }
+  return res.json();
+}
+
+export const reportesApi = {
+  c1_rescatistaPorId:         (id: string)        => reportesGet<unknown>(`/api/reportes/rescatistas/${id}`),
+  c2_animalesPorRescatista:   (id: string)        => reportesGet<unknown>(`/api/reportes/rescatistas/${id}/animales`),
+  c3_animalesPorEspecie:      (especie: string)   => reportesGet<unknown>(`/api/reportes/animales/especie/${encodeURIComponent(especie)}?tamano=100`),
+  c4_consultasPorAnimal:      (id: string)        => reportesGet<unknown>(`/api/reportes/animales/${id}/consultas`),
+  c5_consultasPorVeterinario: (id: string)        => reportesGet<unknown>(`/api/reportes/veterinarios/${id}/consultas`),
+  c6_detalleConsulta:         (codigo: string)    => reportesGet<unknown>(`/api/reportes/consultas/${encodeURIComponent(codigo)}/detalle`),
+  c7_consultasPorEstado:      (estado: string)    => reportesGet<unknown>(`/api/reportes/consultas/por-estado/${encodeURIComponent(estado)}?tamano=100`),
+  c8_serviciosPorConsulta:    (codigo: string)    => reportesGet<unknown>(`/api/reportes/consultas/${encodeURIComponent(codigo)}/servicios`),
+  c9_productosPorConsulta:    (codigo: string)    => reportesGet<unknown>(`/api/reportes/consultas/${encodeURIComponent(codigo)}/productos`),
+  c10_productosPorStock:      ()                  => reportesGet<unknown>(`/api/reportes/productos/por-stock?tamano=100`),
+  c11_servicioPorId:          (id: string)        => reportesGet<unknown>(`/api/reportes/servicios/${id}`),
+  c12_veterinarioPorId:       (id: string)        => reportesGet<unknown>(`/api/reportes/veterinarios/${id}`),
+  c13_veterinariosPorEsp:     (esp: string)       => reportesGet<unknown>(`/api/reportes/veterinarios/especialidad/${encodeURIComponent(esp)}?tamano=100`),
+  c14_productoPorId:          (id: string)        => reportesGet<unknown>(`/api/reportes/productos/${id}`),
+  c15_consultaPorCodigo:      (codigo: string)    => reportesGet<unknown>(`/api/reportes/consultas/${encodeURIComponent(codigo)}`),
+  c16_consultasPorFecha:      (fecha: string)     => reportesGet<unknown>(`/api/reportes/consultas/por-fecha/${fecha}?tamano=100`),
+  c17_animalesPorNombre:      (nombre: string)    => reportesGet<unknown>(`/api/reportes/animales/nombre/${encodeURIComponent(nombre)}?tamano=100`),
+  c19_rescatistasPorZona:     (zona: string)      => reportesGet<unknown>(`/api/reportes/rescatistas/zona/${encodeURIComponent(zona)}?tamano=100`),
+};
+
+// ── Seed (solo desarrollo) ─────────────────────────────────────────────────
+export const seedApi = {
+  animales: () => apiPost<{ sembrado: boolean; animalIds: string[]; mensaje: string }>("animales", "/api/seed", {}),
+  consulta: (animalIds: string[]) => apiPost<{ sembrado: boolean; mensaje: string }>("consulta", "/api/seed", { animalIds }),
 };
