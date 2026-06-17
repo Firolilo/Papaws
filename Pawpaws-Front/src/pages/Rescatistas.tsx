@@ -3,12 +3,13 @@ import { Plus, Mail, Phone, MapPin } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
 import { rescatistasApi } from "../api/endpoints";
-import type { CrearRescatistaDto } from "../types";
+import type { CrearRescatistaDto, Rescatista } from "../types";
 
 const emptyForm: CrearRescatistaDto = {
   nombreCompleto: "",
@@ -24,17 +25,42 @@ export function Rescatistas() {
     rescatistasApi.list()
   );
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Rescatista | null>(null);
   const [form, setForm] = useState<CrearRescatistaDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Rescatista | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm);
+    setSubmitError(null);
+    setOpen(true);
+  }
+
+  function openEdit(r: Rescatista) {
+    setEditing(r);
+    setForm({
+      nombreCompleto: r.nombreCompleto,
+      telefonoContacto: r.telefonoContacto,
+      correoElectronico: r.correoElectronico,
+      organizacion: r.organizacion,
+      zonaOperacion: r.zonaOperacion,
+    });
+    setSubmitError(null);
+    setOpen(true);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await rescatistasApi.create(form);
-      setForm(emptyForm);
+      if (editing) {
+        await rescatistasApi.update(editing.id, form);
+      } else {
+        await rescatistasApi.create(form);
+      }
       setOpen(false);
       reload();
     } catch (err: any) {
@@ -52,7 +78,7 @@ export function Rescatistas() {
         description="Personas y organizaciones que traen animales al centro. Mantén su información al día."
         actions={
           puedeGestionarAnimales ? (
-            <Button onClick={() => setOpen(true)} icon={<Plus size={16} />}>
+            <Button onClick={openCreate} icon={<Plus size={16} />}>
               Nuevo rescatista
             </Button>
           ) : undefined
@@ -69,10 +95,7 @@ export function Rescatistas() {
             description="Comienza creando el primer rescatista para poder ingresar animales al sistema."
             action={
               puedeGestionarAnimales ? (
-                <Button
-                  onClick={() => setOpen(true)}
-                  icon={<Plus size={16} />}
-                >
+                <Button onClick={openCreate} icon={<Plus size={16} />}>
                   Crear rescatista
                 </Button>
               ) : undefined
@@ -84,7 +107,7 @@ export function Rescatistas() {
       {!loading && data && data.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {data.map((r) => (
-            <Card key={r.id} className="p-5">
+            <Card key={r.id} className="p-5 flex flex-col">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-moss-100 text-moss-700 font-display text-lg flex items-center justify-center">
                   {r.nombreCompleto.charAt(0)}
@@ -114,6 +137,21 @@ export function Rescatistas() {
                   {r.zonaOperacion}
                 </li>
               </ul>
+              {puedeGestionarAnimales && (
+                <div className="flex justify-end gap-1 mt-4 pt-3 border-t border-moss-100">
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-clay-600 hover:bg-clay-50"
+                    onClick={() => setToDelete(r)}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -122,7 +160,7 @@ export function Rescatistas() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Nuevo rescatista"
+        title={editing ? "Editar rescatista" : "Nuevo rescatista"}
         subtitle="Registra a la persona u organización que ingresa animales al centro."
       >
         <form onSubmit={onSubmit} className="space-y-4">
@@ -158,35 +196,51 @@ export function Rescatistas() {
             required
             placeholder="ONG, autoridad ambiental, independiente…"
             value={form.organizacion}
-            onChange={(e) =>
-              setForm({ ...form, organizacion: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, organizacion: e.target.value })}
           />
           <Input
             label="Zona de operación"
             required
             value={form.zonaOperacion}
-            onChange={(e) =>
-              setForm({ ...form, zonaOperacion: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, zonaOperacion: e.target.value })}
           />
 
           {submitError && <ErrorBox message={submitError} />}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Guardando…" : "Crear rescatista"}
+              {submitting
+                ? "Guardando…"
+                : editing
+                ? "Guardar cambios"
+                : "Crear rescatista"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Dar de baja rescatista"
+        message={
+          <>
+            ¿Dar de baja a <strong>{toDelete?.nombreCompleto}</strong>? Dejará de
+            aparecer en los listados.
+          </>
+        }
+        tone="danger"
+        confirmLabel="Eliminar"
+        onConfirm={async () => {
+          if (toDelete) {
+            await rescatistasApi.remove(toDelete.id);
+            reload();
+          }
+        }}
+        onClose={() => setToDelete(null)}
+      />
     </>
   );
 }
