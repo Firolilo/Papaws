@@ -386,21 +386,23 @@ export function Reportes() {
 
   // ── Chart click handlers ─────────────────────────────────────────────────────
   const handlePieClick = (entry: any) => {
-    const esp = String(entry?.name ?? "");
+    const p = entry?.payload ?? entry;
+    const esp = String(p?.name ?? "");
     if (!esp) return;
     openChartOverlay({
       title: `${esp}s en el refugio`,
-      sub: `${entry.value} animal${entry.value !== 1 ? "es" : ""} de esta especie`,
+      sub: `${p.value} animal${p.value !== 1 ? "es" : ""} de esta especie`,
       cols: ANIMAL_COLS,
       rowsFn: paginaItems,
       fetchFn: () => reportesApi.c3_animalesPorEspecie(esp),
     });
   };
 
-  const handleEstadoBarClick = (e: any) => {
-    const estado = e?.activePayload?.[0]?.payload?.name;
+  const handleEstadoBarClick = (data: any) => {
+    const p = data?.payload ?? data;
+    const estado = p?.name;
     if (!estado) return;
-    const cnt = e.activePayload[0].payload.value;
+    const cnt = p.value;
     openChartOverlay({
       title: `Consultas ${estado}s`,
       sub: `${cnt} consulta${cnt !== 1 ? "s" : ""} en este estado`,
@@ -410,8 +412,8 @@ export function Reportes() {
     });
   };
 
-  const handleRescatistaBarClick = (e: any) => {
-    const entry = e?.activePayload?.[0]?.payload;
+  const handleRescatistaBarClick = (data: any) => {
+    const entry = data?.payload ?? data;
     if (!entry?.id) return;
     openChartOverlay({
       title: `Animales de ${entry.nombreCompleto}`,
@@ -422,8 +424,8 @@ export function Reportes() {
     });
   };
 
-  const handleProductoBarClick = (e: any) => {
-    const entry = e?.activePayload?.[0]?.payload;
+  const handleProductoBarClick = (data: any) => {
+    const entry = data?.payload ?? data;
     if (!entry?.id) return;
     openChartOverlay({
       title: entry.fullName,
@@ -560,12 +562,12 @@ export function Reportes() {
             <p className="text-xs text-ink-400 mb-3">Tocá una barra para ver todas las consultas de ese estado</p>
             {consultas.loading ? <Spinner /> : (
               <ResponsiveContainer width="100%" height={270}>
-                <BarChart data={estadoBarData} onClick={handleEstadoBarClick} barSize={52}>
+                <BarChart data={estadoBarData} barSize={52}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e9f6f2" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,95,115,0.05)", radius: 8 }} />
-                  <Bar dataKey="value" radius={[10, 10, 0, 0]} cursor="pointer">
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]} cursor="pointer" onClick={handleEstadoBarClick}>
                     {estadoBarData.map((e) => <Cell key={e.name} fill={ESTADO_PALETTE[e.name] ?? C.ink400} />)}
                     <LabelList dataKey="value" position="top" style={{ fontSize: 12, fill: "#5a6068", fontWeight: 700 }} />
                   </Bar>
@@ -584,12 +586,12 @@ export function Reportes() {
             ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
             : (
               <ResponsiveContainer width="100%" height={270}>
-                <BarChart data={rescatistaBarData} onClick={handleRescatistaBarClick} barSize={36}>
+                <BarChart data={rescatistaBarData} barSize={36}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e9f6f2" vertical={false} />
                   <XAxis dataKey="nombre" tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,95,115,0.05)", radius: 8 }} />
-                  <Bar dataKey="animales" radius={[10, 10, 0, 0]} cursor="pointer">
+                  <Bar dataKey="animales" radius={[10, 10, 0, 0]} cursor="pointer" onClick={handleRescatistaBarClick}>
                     {rescatistaBarData.map((_, i) => <Cell key={i} fill={RESCATISTA_PAL[i % RESCATISTA_PAL.length]} />)}
                     <LabelList dataKey="animales" position="top" style={{ fontSize: 12, fill: "#5a6068", fontWeight: 700 }} />
                   </Bar>
@@ -610,12 +612,12 @@ export function Reportes() {
               ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
               : (
                 <ResponsiveContainer width="100%" height={270}>
-                  <BarChart layout="vertical" data={stockBarData} onClick={handleProductoBarClick} margin={{ left: 0, right: 32 }} barSize={22}>
+                  <BarChart layout="vertical" data={stockBarData} margin={{ left: 0, right: 32 }} barSize={22}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e9f6f2" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11, fill: "#5a6068" }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={76} tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} />
                     <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,95,115,0.05)" }} />
-                    <Bar dataKey="stock" radius={[0, 8, 8, 0]} cursor="pointer">
+                    <Bar dataKey="stock" radius={[0, 8, 8, 0]} cursor="pointer" onClick={handleProductoBarClick}>
                       {stockBarData.map((e, i) => <Cell key={i} fill={e.fill} />)}
                       <LabelList dataKey="stock" position="right" style={{ fontSize: 11, fill: "#5a6068", fontWeight: 700 }} />
                     </Bar>
