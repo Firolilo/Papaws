@@ -3,7 +3,13 @@
     "allow": [
       "Bash(python -c \"import sys,json;print\\(json.load\\(sys.stdin\\)['scripts']\\)\")",
       "Bash(python -c \"import sys,json;print\\(len\\(json.load\\(sys.stdin\\)\\),'consultas'\\)\")",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "Bash(command -v pdflatex)",
+      "Bash(pdflatex -interaction=nonstopmode -halt-on-error esquema-cassandra.tex)",
+      "Bash(rm -f esquema-cassandra.aux esquema-cassandra.log esquema-cassandra.out build.log && ls -la)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\bruno\\Documentos\\Proyectos\\Papaws\\docs"
     ]
   }
 }

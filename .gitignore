@@ -9,5 +9,7 @@
 *.user
 *.suo
 
+docs/
+
 # Logs
 *.log
