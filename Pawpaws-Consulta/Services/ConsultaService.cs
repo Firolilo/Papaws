@@ -38,7 +38,6 @@ public class ConsultaService : IConsultaService
     private readonly PreparedStatement _deleteConsultaByCodigoStatement;
     private readonly PreparedStatement _deleteCodigoByAnimalStatement;
     private readonly PreparedStatement _deleteCodigoByVeterinarioStatement;
-    private readonly PreparedStatement _selectAllConsultaServiciosStatement;
 
     public ConsultaService(
         Cassandra.ISession session,
@@ -73,7 +72,6 @@ public class ConsultaService : IConsultaService
         _deleteConsultaByCodigoStatement = _session.Prepare("DELETE FROM consultas_by_codigo WHERE codigo = ?");
         _deleteCodigoByAnimalStatement = _session.Prepare("DELETE FROM consulta_codigos_by_animal WHERE animal_id = ? AND codigo = ?");
         _deleteCodigoByVeterinarioStatement = _session.Prepare("DELETE FROM consulta_codigos_by_veterinario WHERE veterinario_id = ? AND codigo = ?");
-        _selectAllConsultaServiciosStatement = _session.Prepare("SELECT codigo, servicio_id FROM consulta_servicios_by_codigo");
     }
 
     public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerTodosAsync()
@@ -372,34 +370,6 @@ public class ConsultaService : IConsultaService
         foreach (var consulta in consultas)
         {
             await EliminarConsultaCompletaAsync(consulta);
-        }
-    }
-
-    public async Task EliminarPorVeterinarioAsync(Guid veterinarioId)
-    {
-        foreach (var consulta in await ObtenerPorVeterinarioAsync(veterinarioId))
-        {
-            await EliminarConsultaCompletaAsync(consulta);
-        }
-    }
-
-    public async Task EliminarPorServicioAsync(Guid servicioId)
-    {
-        // No existe índice servicio -> consultas; escaneamos consulta_servicios_by_codigo
-        // (volumen acotado) y resolvemos los códigos afectados.
-        var filas = await _session.ExecuteAsync(_selectAllConsultaServiciosStatement.Bind());
-        var codigos = filas
-            .Where(row => row.GetValue<Guid>("servicio_id") == servicioId)
-            .Select(row => row.GetValue<string>("codigo"))
-            .Distinct()
-            .ToList();
-
-        foreach (var codigo in codigos)
-        {
-            if (await ObtenerPorCodigoAsync(codigo) is { } consulta)
-            {
-                await EliminarConsultaCompletaAsync(consulta);
-            }
         }
     }
 

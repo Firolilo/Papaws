@@ -141,6 +141,8 @@ public class ConsultasController : ControllerBase
 
     // Borrado en cascada invocado por el servicio de Animales al eliminar un animal:
     // elimina físicamente todas sus consultas (y restaura el stock asociado).
+    // Admite EncargadoRescatistas porque es quien puede borrar animales (dispara la cascada).
+    [Authorize(Roles = Roles.CascadaAnimales)]
     [HttpDelete("animal/{animalId:guid}")]
     public async Task<IActionResult> EliminarPorAnimal(Guid animalId)
     {

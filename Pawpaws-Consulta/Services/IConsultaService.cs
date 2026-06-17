@@ -20,8 +20,8 @@ public interface IConsultaService
     Task<bool> RegistrarProductosAsync(string codigo, List<ProductoUsadoDto> productosUsados);
     Task<List<ProductoUsadoDto>> ObtenerProductosUsadosAsync(string codigo);
 
-    // Borrado en cascada: eliminan físicamente las consultas relacionadas (y restauran stock).
+    // Borrado en cascada al eliminar un animal: elimina físicamente sus consultas (y restaura
+    // stock). Veterinarios y servicios NO cascadean: se dan de baja lógica y sus consultas se
+    // conservan para preservar el historial clínico.
     Task EliminarPorAnimalAsync(Guid animalId);
-    Task EliminarPorVeterinarioAsync(Guid veterinarioId);
-    Task EliminarPorServicioAsync(Guid servicioId);
 }

@@ -13,12 +13,10 @@ namespace Pawpaws.Consulta.Controllers;
 public class VeterinariosController : ControllerBase
 {
     private readonly IVeterinarioService _veterinarioService;
-    private readonly IConsultaService _consultaService;
 
-    public VeterinariosController(IVeterinarioService veterinarioService, IConsultaService consultaService)
+    public VeterinariosController(IVeterinarioService veterinarioService)
     {
         _veterinarioService = veterinarioService;
-        _consultaService = consultaService;
     }
 
     [HttpGet]
@@ -58,9 +56,8 @@ public class VeterinariosController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Eliminar(Guid id)
     {
-        // Cascada: las consultas del veterinario se eliminan antes de darlo de baja.
-        await _consultaService.EliminarPorVeterinarioAsync(id);
-
+        // Baja lógica: el veterinario queda inactivo pero se conserva su fila para no romper
+        // las consultas históricas que lo referencian (preserva el historial clínico).
         var eliminado = await _veterinarioService.EliminarAsync(id);
         if (!eliminado)
             return NotFound(new { mensaje = "Veterinario no encontrado." });

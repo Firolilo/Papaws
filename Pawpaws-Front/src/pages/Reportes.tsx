@@ -200,6 +200,9 @@ const REPORTS: ReportCfg[] = [
 ];
 
 const GROUPS = ["Rescatistas", "Animales", "Consultas", "Veterinarios", "Servicios", "Productos"];
+// Reportes que solo consultan los servicios de Animales/Rescatistas (LecturaGlobal): visibles
+// para todos los roles. El resto llama al servicio de Consulta y requiere acceso a consultas.
+const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c3", "c17"];
 const ESTADOS = ["Pendiente", "Confirmada", "Completada", "Cancelada"];
 const ESPECIE_OPTIONS:      SelectOption[] = ["Perro","Gato","Conejo","Ave","Loro","Tortuga","Hámster","Iguana","Gecko","Serpiente","Chinchilla"].map(e=>({value:e,label:e}));
 const ZONA_OPTIONS:         SelectOption[] = ["Norte","Sur","Este","Oeste","Centro"].map(z=>({value:z,label:z}));
@@ -254,6 +257,15 @@ const ChartTip = ({ active, payload, label }: any) => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export function Reportes() {
   const { puedeAccederConsultas } = useAuth();
+
+  // Reportes visibles según rol: sin acceso a consultas, solo los de animales/rescatistas.
+  const visibleReports = useMemo(
+    () =>
+      puedeAccederConsultas
+        ? REPORTS
+        : REPORTS.filter((r) => REPORTES_TODOS_LOS_ROLES.includes(r.id)),
+    [puedeAccederConsultas]
+  );
 
   const animales    = useFetch(() => animalesApi.list());
   const consultas   = useFetch(() => (puedeAccederConsultas ? consultasApi.list()     : Promise.resolve([])), [puedeAccederConsultas]);
@@ -438,9 +450,9 @@ export function Reportes() {
   // ── Palette filter ───────────────────────────────────────────────────────────
   const filteredPaletteReports = useMemo(() => {
     const q = paletteQuery.toLowerCase().trim();
-    if (!q) return REPORTS;
-    return REPORTS.filter((r) => r.label.toLowerCase().includes(q) || r.chebotko.toLowerCase().includes(q) || r.group.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q));
-  }, [paletteQuery]);
+    if (!q) return visibleReports;
+    return visibleReports.filter((r) => r.label.toLowerCase().includes(q) || r.chebotko.toLowerCase().includes(q) || r.group.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q));
+  }, [paletteQuery, visibleReports]);
 
   // ── Current overlay report ───────────────────────────────────────────────────
   const oReport = overlay?.kind === "report" ? REPORTS.find((r) => r.id === overlay.reportId) ?? null : null;
@@ -619,7 +631,7 @@ export function Reportes() {
         <BarChart2 size={22} className="text-moss-700" />
         <div>
           <h2 className="font-display text-2xl text-moss-800">Generador de reportes</h2>
-          <p className="text-xs text-ink-400">{REPORTS.length} reportes disponibles — buscá por nombre, categoría o código</p>
+          <p className="text-xs text-ink-400">{visibleReports.length} reportes disponibles — buscá por nombre, categoría o código</p>
         </div>
       </div>
 
@@ -666,7 +678,7 @@ export function Reportes() {
                     : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-ink-400 font-mono bg-moss-50 px-1.5 py-0.5 rounded border border-moss-200">ESC</span>
                   }
                 </div>
-                <p className="text-xs text-ink-400 mt-2">{filteredPaletteReports.length} de {REPORTS.length} reportes</p>
+                <p className="text-xs text-ink-400 mt-2">{filteredPaletteReports.length} de {visibleReports.length} reportes</p>
               </div>
               <div className="overflow-y-auto flex-1">
                 {filteredPaletteReports.length === 0 ? (
@@ -687,7 +699,8 @@ export function Reportes() {
                   </div>
                 ) : (
                   GROUPS.map((group) => {
-                    const items = REPORTS.filter((r) => r.group === group);
+                    const items = visibleReports.filter((r) => r.group === group);
+                    if (items.length === 0) return null;
                     return (
                       <div key={group}>
                         <p className="px-5 pt-4 pb-1.5 text-[10px] uppercase tracking-[0.18em] font-bold text-ink-400">{group}</p>
