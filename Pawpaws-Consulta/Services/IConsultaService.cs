@@ -19,4 +19,9 @@ public interface IConsultaService
     Task<bool> RegistrarDiagnosticoAsync(string codigo, string diagnostico, string indicacionesSeguimiento);
     Task<bool> RegistrarProductosAsync(string codigo, List<ProductoUsadoDto> productosUsados);
     Task<List<ProductoUsadoDto>> ObtenerProductosUsadosAsync(string codigo);
+
+    // Borrado en cascada: eliminan físicamente las consultas relacionadas (y restauran stock).
+    Task EliminarPorAnimalAsync(Guid animalId);
+    Task EliminarPorVeterinarioAsync(Guid veterinarioId);
+    Task EliminarPorServicioAsync(Guid servicioId);
 }

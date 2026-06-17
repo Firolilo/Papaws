@@ -179,7 +179,7 @@ export function Dashboard() {
             />
             <Metric
               label="Rescatistas"
-              value={rescatistas.data?.length ?? 0}
+              value={(rescatistas.data ?? []).filter((r) => !r.oculto).length}
               icon={<HeartHandshake size={18} />}
               tone="clay"
               href="/rescatistas"

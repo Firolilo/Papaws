@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Mail, Phone, MapPin } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
-import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Combobox } from "../components/Combobox";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
-import { rescatistasApi } from "../api/endpoints";
-import type { CrearRescatistaDto, Rescatista } from "../types";
+import { animalesApi, rescatistasApi } from "../api/endpoints";
+import type { Animal, CrearRescatistaDto, Rescatista } from "../types";
 
 const emptyForm: CrearRescatistaDto = {
   nombreCompleto: "",
@@ -29,7 +29,57 @@ export function Rescatistas() {
   const [form, setForm] = useState<CrearRescatistaDto>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Eliminación con reasignación de animales.
   const [toDelete, setToDelete] = useState<Rescatista | null>(null);
+  const [delAnimals, setDelAnimals] = useState<Animal[] | null>(null); // null = cargando
+  const [reasignarA, setReasignarA] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // El Refugio (y cualquier rescatista interno) no se muestra ni se gestiona desde la UI.
+  const visibles = useMemo(
+    () => (data ?? []).filter((r) => !r.oculto),
+    [data]
+  );
+
+  const reasignarOpciones = useMemo(
+    () =>
+      visibles
+        .filter((r) => r.id !== toDelete?.id)
+        .map((r) => ({
+          value: r.id,
+          label: r.nombreCompleto,
+          hint: r.organizacion,
+        })),
+    [visibles, toDelete]
+  );
+
+  function openDelete(r: Rescatista) {
+    setToDelete(r);
+    setDelAnimals(null);
+    setReasignarA("");
+    setDeleteError(null);
+    animalesApi
+      .porRescatista(r.id)
+      .then(setDelAnimals)
+      .catch(() => setDelAnimals([]));
+  }
+
+  async function confirmarEliminar() {
+    if (!toDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await rescatistasApi.remove(toDelete.id, reasignarA || undefined);
+      setToDelete(null);
+      reload();
+    } catch (err: any) {
+      setDeleteError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   function openCreate() {
     setEditing(null);
@@ -88,7 +138,7 @@ export function Rescatistas() {
       {error && <ErrorBox message={error} />}
       {loading && <Spinner />}
 
-      {!loading && data && data.length === 0 && (
+      {!loading && data && visibles.length === 0 && (
         <Card>
           <EmptyState
             title="Sin rescatistas registrados"
@@ -104,9 +154,9 @@ export function Rescatistas() {
         </Card>
       )}
 
-      {!loading && data && data.length > 0 && (
+      {!loading && data && visibles.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.map((r) => (
+          {visibles.map((r) => (
             <Card key={r.id} className="p-5 flex flex-col">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-moss-100 text-moss-700 font-display text-lg flex items-center justify-center">
@@ -146,7 +196,7 @@ export function Rescatistas() {
                     size="sm"
                     variant="ghost"
                     className="text-clay-600 hover:bg-clay-50"
-                    onClick={() => setToDelete(r)}
+                    onClick={() => openDelete(r)}
                   >
                     Eliminar
                   </Button>
@@ -222,25 +272,84 @@ export function Rescatistas() {
         </form>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={!!toDelete}
+        onClose={() => (deleting ? undefined : setToDelete(null))}
         title="Dar de baja rescatista"
-        message={
-          <>
-            ¿Dar de baja a <strong>{toDelete?.nombreCompleto}</strong>? Dejará de
-            aparecer en los listados.
-          </>
+        subtitle={
+          toDelete ? `Vas a eliminar a ${toDelete.nombreCompleto}.` : undefined
         }
-        tone="danger"
-        confirmLabel="Eliminar"
-        onConfirm={async () => {
-          if (toDelete) {
-            await rescatistasApi.remove(toDelete.id);
-            reload();
-          }
-        }}
-        onClose={() => setToDelete(null)}
-      />
+      >
+        {delAnimals === null ? (
+          <div className="py-6">
+            <Spinner />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {delAnimals.length === 0 ? (
+              <p className="text-sm text-ink-600">
+                Este rescatista no tiene animales asociados. Se dará de baja y
+                dejará de aparecer en los listados.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-ink-600">
+                  Tiene{" "}
+                  <strong>
+                    {delAnimals.length} animal
+                    {delAnimals.length === 1 ? "" : "es"}
+                  </strong>
+                  . Los animales no pueden quedar sin rescatista, así que se
+                  reasignarán antes de eliminarlo.
+                </p>
+                {reasignarOpciones.length > 0 ? (
+                  <>
+                    <Combobox
+                      label="Reasignar animales a"
+                      value={reasignarA}
+                      onChange={setReasignarA}
+                      options={reasignarOpciones}
+                      placeholder="Refugio (por defecto)"
+                      searchPlaceholder="Buscar rescatista…"
+                      emptyText="No hay rescatistas"
+                    />
+                    <p className="text-xs text-ink-500">
+                      Si no eliges ninguno, los animales pasarán al{" "}
+                      <strong>Refugio</strong>.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-ink-600 rounded-xl bg-bone-100 border border-bone-200 px-3 py-2.5">
+                    No hay otros rescatistas disponibles. Los animales pasarán
+                    automáticamente al <strong>Refugio</strong>.
+                  </p>
+                )}
+              </>
+            )}
+
+            {deleteError && <ErrorBox message={deleteError} />}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setToDelete(null)}
+                disabled={deleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={confirmarEliminar}
+                disabled={deleting}
+              >
+                {deleting ? "Eliminando…" : "Eliminar"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

@@ -6,6 +6,6 @@ public class ServicioPorConsultaDto
     public string CodConsulta { get; set; } = string.Empty;
     public Guid IdServicio { get; set; }
     public string NombreServicio { get; set; } = string.Empty;
-    public int DuracionEstimada { get; set; }
-    public decimal Costo { get; set; }
+    public int DuracionEstimadaMinutos { get; set; }
+    public decimal PrecioBase { get; set; }
 }

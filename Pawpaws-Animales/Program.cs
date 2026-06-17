@@ -73,6 +73,16 @@ await CassandraSchema.InitializeAsync(session, keyspace);
 session = await cluster.ConnectAsync(keyspace);
 
 builder.Services.AddSingleton(session);
+
+// Necesario para reenviar el token del usuario en las llamadas al servicio de Consulta.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient<IConsultaReferenceService, ConsultaReferenceService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:ConsultaBaseUrl"] ?? "http://localhost:8081");
+    // Evita que una caída del servicio de Consulta deje peticiones colgadas indefinidamente.
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
 builder.Services.AddScoped<IRescatistaService, RescatistaService>();
 builder.Services.AddScoped<IAnimalService, AnimalService>();
 builder.Services.AddScoped<IDatosPruebaService, DatosPruebaService>();

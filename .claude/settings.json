@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import sys,json;print\\(json.load\\(sys.stdin\\)['scripts']\\)\")",
+      "Bash(python -c \"import sys,json;print\\(len\\(json.load\\(sys.stdin\\)\\),'consultas'\\)\")"
+    ]
+  }
+}

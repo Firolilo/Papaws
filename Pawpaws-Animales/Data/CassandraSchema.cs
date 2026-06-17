@@ -1,4 +1,5 @@
 using Cassandra;
+using Pawpaws.Animales.Models;
 
 namespace Pawpaws.Animales.Data;
 
@@ -16,11 +17,18 @@ CREATE TABLE IF NOT EXISTS {keyspace}.rescatistas_by_id (
     correo_electronico text,
     organizacion text,
     zona_operacion text,
-    activo boolean
+    activo boolean,
+    oculto boolean
 )"));
 
-        // Migración para keyspaces creados antes de incorporar el borrado lógico.
+        // Migración para keyspaces creados antes de incorporar el borrado lógico / el rescatista oculto.
         await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.rescatistas_by_id ADD IF NOT EXISTS activo boolean"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.rescatistas_by_id ADD IF NOT EXISTS oculto boolean"));
+
+        // Rescatista interno "Refugio": destino por defecto al eliminar un rescatista. Siempre existe.
+        await session.ExecuteAsync(new SimpleStatement(
+            $@"INSERT INTO {keyspace}.rescatistas_by_id (id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS",
+            Rescatista.RefugioId, "Refugio", "—", "—", "Refugio interno", "—", true, true));
 
         await session.ExecuteAsync(new SimpleStatement($@"
 CREATE TABLE IF NOT EXISTS {keyspace}.animales_by_id (

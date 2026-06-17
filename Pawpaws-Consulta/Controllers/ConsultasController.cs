@@ -138,4 +138,13 @@ public class ConsultasController : ControllerBase
 
         return NoContent();
     }
+
+    // Borrado en cascada invocado por el servicio de Animales al eliminar un animal:
+    // elimina físicamente todas sus consultas (y restaura el stock asociado).
+    [HttpDelete("animal/{animalId:guid}")]
+    public async Task<IActionResult> EliminarPorAnimal(Guid animalId)
+    {
+        await _consultaService.EliminarPorAnimalAsync(animalId);
+        return NoContent();
+    }
 }

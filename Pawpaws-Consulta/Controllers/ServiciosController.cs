@@ -13,10 +13,12 @@ namespace Pawpaws.Consulta.Controllers;
 public class ServiciosController : ControllerBase
 {
     private readonly IServicioService _servicioService;
+    private readonly IConsultaService _consultaService;
 
-    public ServiciosController(IServicioService servicioService)
+    public ServiciosController(IServicioService servicioService, IConsultaService consultaService)
     {
         _servicioService = servicioService;
+        _consultaService = consultaService;
     }
 
     [HttpGet]
@@ -56,6 +58,9 @@ public class ServiciosController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Eliminar(Guid id)
     {
+        // Cascada: las consultas que usan el servicio se eliminan antes de darlo de baja.
+        await _consultaService.EliminarPorServicioAsync(id);
+
         var eliminado = await _servicioService.EliminarAsync(id);
         if (!eliminado)
             return NotFound(new { mensaje = "Servicio no encontrado." });

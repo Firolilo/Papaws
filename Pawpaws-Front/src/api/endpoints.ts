@@ -37,7 +37,14 @@ export const rescatistasApi = {
     apiPost<Rescatista>("animales", "/api/rescatistas", dto),
   update: (id: string, dto: ActualizarRescatistaDto) =>
     apiPut<void>("animales", `/api/rescatistas/${id}`, dto),
-  remove: (id: string) => apiDelete("animales", `/api/rescatistas/${id}`),
+  // reasignarA: rescatista al que se mueven los animales. Si se omite, el backend usa "Refugio".
+  remove: (id: string, reasignarA?: string) =>
+    apiDelete(
+      "animales",
+      reasignarA
+        ? `/api/rescatistas/${id}?reasignarA=${reasignarA}`
+        : `/api/rescatistas/${id}`
+    ),
 };
 
 export const animalesApi = {

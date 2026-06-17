@@ -9,7 +9,7 @@ public static class Mappers
         new(a.Id, a.Nombre, a.Especie, a.PesoActual, a.FechaIngreso, a.RescatistaId);
 
     public static RescatistaResponseDto ToResponse(this Rescatista r) =>
-        new(r.Id, r.NombreCompleto, r.TelefonoContacto, r.CorreoElectronico, r.Organizacion, r.ZonaOperacion);
+        new(r.Id, r.NombreCompleto, r.TelefonoContacto, r.CorreoElectronico, r.Organizacion, r.ZonaOperacion, r.Oculto);
 
     public static List<AnimalResponseDto> ToResponse(this IEnumerable<Animal> animales) =>
         animales.Select(ToResponse).ToList();

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Pawpaws.Animales.Common;
 using Pawpaws.Animales.DTOs;
+using Pawpaws.Animales.Models;
 using Pawpaws.Animales.Security;
 using Pawpaws.Animales.Services;
 
@@ -13,10 +14,12 @@ namespace Pawpaws.Animales.Controllers;
 public class RescatistasController : ControllerBase
 {
     private readonly IRescatistaService _rescatistaService;
+    private readonly IAnimalService _animalService;
 
-    public RescatistasController(IRescatistaService rescatistaService)
+    public RescatistasController(IRescatistaService rescatistaService, IAnimalService animalService)
     {
         _rescatistaService = rescatistaService;
+        _animalService = animalService;
     }
 
     [Authorize(Roles = Roles.LecturaAnimales)]
@@ -57,10 +60,24 @@ public class RescatistasController : ControllerBase
         return NoContent();
     }
 
+    // Al eliminar un rescatista, sus animales se reasignan a otro rescatista (parámetro
+    // reasignarA). Si no se indica, van al rescatista interno "Refugio".
     [Authorize(Roles = Roles.GestionAnimales)]
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Eliminar(Guid id)
+    public async Task<IActionResult> Eliminar(Guid id, [FromQuery] Guid? reasignarA = null)
     {
+        var destinoId = reasignarA ?? Rescatista.RefugioId;
+
+        if (destinoId == id)
+            return BadRequest(new { mensaje = "No se puede reasignar los animales al mismo rescatista que se elimina." });
+
+        var destino = await _rescatistaService.ObtenerPorIdAsync(destinoId);
+        if (destino is null || !destino.Activo)
+            return BadRequest(new { mensaje = "El rescatista destino no existe o está dado de baja." });
+
+        // Primero reasignamos los animales (no pueden quedar sin rescatista), luego damos de baja.
+        await _animalService.ReasignarAnimalesAsync(id, destinoId);
+
         var eliminado = await _rescatistaService.EliminarAsync(id);
         if (!eliminado)
             return NotFound(new { mensaje = "Rescatista no encontrado." });

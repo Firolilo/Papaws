@@ -160,8 +160,8 @@ public class ReporteService : IReporteService
                 CodConsulta = codigo,
                 IdServicio = servicio.Id,
                 NombreServicio = servicio.Nombre,
-                DuracionEstimada = servicio.DuracionEstimadaMinutos,
-                Costo = servicio.PrecioBase
+                DuracionEstimadaMinutos = servicio.DuracionEstimadaMinutos,
+                PrecioBase = servicio.PrecioBase
             });
         }
         return resultado.OrderBy(s => s.NombreServicio).ToList();

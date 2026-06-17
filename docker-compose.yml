@@ -52,6 +52,7 @@ services:
     environment:
       - Cassandra__ContactPoints=cassandra-animales,cassandra-consulta
       - Cassandra__Port=9042
+      - Services__ConsultaBaseUrl=http://papaws-consulta:8081
       - ASPNETCORE_ENVIRONMENT=Development
       - Auth__Jwt__Key=papaws_jwt_clave_de_desarrollo_no_usar_en_produccion_0123456789AB
     ports:

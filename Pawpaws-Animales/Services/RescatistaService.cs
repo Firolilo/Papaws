@@ -16,9 +16,9 @@ public class RescatistaService : IRescatistaService
     public RescatistaService(Cassandra.ISession session)
     {
         _session = session;
-        _insertStatement = _session.Prepare("INSERT INTO rescatistas_by_id (id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        _selectAllStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo FROM rescatistas_by_id");
-        _selectByIdStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo FROM rescatistas_by_id WHERE id = ?");
+        _insertStatement = _session.Prepare("INSERT INTO rescatistas_by_id (id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        _selectAllStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto FROM rescatistas_by_id");
+        _selectByIdStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto FROM rescatistas_by_id WHERE id = ?");
         _updateStatement = _session.Prepare("UPDATE rescatistas_by_id SET nombre_completo = ?, telefono_contacto = ?, correo_electronico = ?, organizacion = ?, zona_operacion = ? WHERE id = ?");
         _softDeleteStatement = _session.Prepare("UPDATE rescatistas_by_id SET activo = false WHERE id = ?");
     }
@@ -48,7 +48,8 @@ public class RescatistaService : IRescatistaService
             CorreoElectronico = dto.CorreoElectronico,
             Organizacion = dto.Organizacion,
             ZonaOperacion = dto.ZonaOperacion,
-            Activo = true
+            Activo = true,
+            Oculto = false
         };
 
         await _session.ExecuteAsync(_insertStatement.Bind(
@@ -58,7 +59,8 @@ public class RescatistaService : IRescatistaService
             rescatista.CorreoElectronico,
             rescatista.Organizacion,
             rescatista.ZonaOperacion,
-            rescatista.Activo));
+            rescatista.Activo,
+            rescatista.Oculto));
 
         return rescatista;
     }
@@ -84,6 +86,11 @@ public class RescatistaService : IRescatistaService
 
     public async Task<bool> EliminarAsync(Guid id)
     {
+        if (id == Rescatista.RefugioId)
+        {
+            throw new InvalidOperationException("El rescatista Refugio es interno y no puede eliminarse.");
+        }
+
         var actual = await ObtenerPorIdAsync(id);
         if (actual is null || !actual.Activo)
         {
@@ -106,7 +113,9 @@ public class RescatistaService : IRescatistaService
             Organizacion = row.GetValue<string>("organizacion"),
             ZonaOperacion = row.GetValue<string>("zona_operacion"),
             // Filas previas a la migración no tienen 'activo' → se consideran activas.
-            Activo = row.IsNull("activo") || row.GetValue<bool>("activo")
+            Activo = row.IsNull("activo") || row.GetValue<bool>("activo"),
+            // Filas previas a la migración no tienen 'oculto' → se consideran visibles.
+            Oculto = !row.IsNull("oculto") && row.GetValue<bool>("oculto")
         };
     }
 }

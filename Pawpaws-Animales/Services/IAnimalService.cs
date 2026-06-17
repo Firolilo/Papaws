@@ -11,4 +11,7 @@ public interface IAnimalService
     Task<Animal> CrearAsync(CrearAnimalDto dto);
     Task<bool> ActualizarAsync(Guid id, ActualizarAnimalDto dto);
     Task<bool> EliminarAsync(Guid id);
+
+    // Mueve todos los animales de un rescatista a otro. Devuelve cuántos se reasignaron.
+    Task<int> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId);
 }

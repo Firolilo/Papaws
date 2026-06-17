@@ -55,11 +55,13 @@ export function Animales() {
 
   const rescatistaOptions = useMemo(
     () =>
-      (rescatistas.data ?? []).map((r) => ({
-        value: r.id,
-        label: r.nombreCompleto,
-        hint: r.organizacion,
-      })),
+      (rescatistas.data ?? [])
+        .filter((r) => !r.oculto)
+        .map((r) => ({
+          value: r.id,
+          label: r.nombreCompleto,
+          hint: r.organizacion,
+        })),
     [rescatistas.data]
   );
 

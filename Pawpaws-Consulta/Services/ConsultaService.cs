@@ -34,6 +34,11 @@ public class ConsultaService : IConsultaService
     private readonly PreparedStatement _insertCodigoByVeterinarioStatement;
     private readonly PreparedStatement _selectCodigosByAnimalStatement;
     private readonly PreparedStatement _selectCodigosByVeterinarioStatement;
+    private readonly PreparedStatement _deleteConsultaProductosStatement;
+    private readonly PreparedStatement _deleteConsultaByCodigoStatement;
+    private readonly PreparedStatement _deleteCodigoByAnimalStatement;
+    private readonly PreparedStatement _deleteCodigoByVeterinarioStatement;
+    private readonly PreparedStatement _selectAllConsultaServiciosStatement;
 
     public ConsultaService(
         Cassandra.ISession session,
@@ -64,6 +69,11 @@ public class ConsultaService : IConsultaService
         _insertCodigoByVeterinarioStatement = _session.Prepare("INSERT INTO consulta_codigos_by_veterinario (veterinario_id, codigo) VALUES (?, ?)");
         _selectCodigosByAnimalStatement = _session.Prepare("SELECT codigo FROM consulta_codigos_by_animal WHERE animal_id = ?");
         _selectCodigosByVeterinarioStatement = _session.Prepare("SELECT codigo FROM consulta_codigos_by_veterinario WHERE veterinario_id = ?");
+        _deleteConsultaProductosStatement = _session.Prepare("DELETE FROM consulta_productos_by_codigo WHERE codigo = ?");
+        _deleteConsultaByCodigoStatement = _session.Prepare("DELETE FROM consultas_by_codigo WHERE codigo = ?");
+        _deleteCodigoByAnimalStatement = _session.Prepare("DELETE FROM consulta_codigos_by_animal WHERE animal_id = ? AND codigo = ?");
+        _deleteCodigoByVeterinarioStatement = _session.Prepare("DELETE FROM consulta_codigos_by_veterinario WHERE veterinario_id = ? AND codigo = ?");
+        _selectAllConsultaServiciosStatement = _session.Prepare("SELECT codigo, servicio_id FROM consulta_servicios_by_codigo");
     }
 
     public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerTodosAsync()
@@ -227,6 +237,12 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("Una consulta completada solo puede cancelarse.");
         }
 
+        // Al cancelar, los productos registrados no llegaron a consumirse: se devuelven al stock.
+        if (estadoNuevoNormalizado.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
+        {
+            await RestaurarStockAsync(codigo);
+        }
+
         await _session.ExecuteAsync(_updateEstadoStatement.Bind(estadoNuevoNormalizado, codigo));
         return true;
     }
@@ -321,12 +337,20 @@ public class ConsultaService : IConsultaService
             }
         }
 
-        // Paso 2: aplicar (descuento de stock + registro), ya validado.
+        // Cantidades ya registradas en esta consulta. Acumulamos sobre ellas en vez de
+        // sobreescribir: la PK es (codigo, producto_id), así que un INSERT plano pisaría el
+        // valor anterior dejando el registro y el stock descontado fuera de sincronía.
+        var yaRegistradas = (await ObtenerProductosUsadosAsync(codigo))
+            .ToDictionary(p => p.ProductoId, p => p.CantidadUsada);
+
+        // Paso 2: aplicar. El stock se descuenta solo por la cantidad NUEVA solicitada;
+        // el registro guarda el acumulado para reflejar el total realmente usado.
         var batch = new BatchStatement();
         foreach (var (productoId, cantidad) in cantidadesPorProducto)
         {
             await _productoService.AjustarStockAsync(productoId, -cantidad);
-            batch.Add(_insertConsultaProductoStatement.Bind(codigo, productoId, cantidad));
+            var total = yaRegistradas.GetValueOrDefault(productoId) + cantidad;
+            batch.Add(_insertConsultaProductoStatement.Bind(codigo, productoId, total));
         }
         await _session.ExecuteAsync(batch);
 
@@ -336,6 +360,64 @@ public class ConsultaService : IConsultaService
             await _session.ExecuteAsync(_updateEstadoStatement.Bind("Completada", codigo));
         }
         return true;
+    }
+
+    public async Task EliminarPorAnimalAsync(Guid animalId)
+    {
+        foreach (var consulta in await ObtenerPorAnimalAsync(animalId))
+        {
+            await EliminarConsultaCompletaAsync(consulta);
+        }
+    }
+
+    public async Task EliminarPorVeterinarioAsync(Guid veterinarioId)
+    {
+        foreach (var consulta in await ObtenerPorVeterinarioAsync(veterinarioId))
+        {
+            await EliminarConsultaCompletaAsync(consulta);
+        }
+    }
+
+    public async Task EliminarPorServicioAsync(Guid servicioId)
+    {
+        // No existe índice servicio -> consultas; escaneamos consulta_servicios_by_codigo
+        // (volumen acotado) y resolvemos los códigos afectados.
+        var filas = await _session.ExecuteAsync(_selectAllConsultaServiciosStatement.Bind());
+        var codigos = filas
+            .Where(row => row.GetValue<Guid>("servicio_id") == servicioId)
+            .Select(row => row.GetValue<string>("codigo"))
+            .Distinct()
+            .ToList();
+
+        foreach (var codigo in codigos)
+        {
+            if (await ObtenerPorCodigoAsync(codigo) is { } consulta)
+            {
+                await EliminarConsultaCompletaAsync(consulta);
+            }
+        }
+    }
+
+    // Borrado físico completo de una consulta: devuelve el stock y limpia todas las tablas
+    // satélite (servicios, productos y punteros por animal / veterinario).
+    private async Task EliminarConsultaCompletaAsync(Pawpaws.Consulta.Models.Consulta consulta)
+    {
+        await RestaurarStockAsync(consulta.Codigo);
+        await _session.ExecuteAsync(_deleteConsultaServiciosStatement.Bind(consulta.Codigo));
+        await _session.ExecuteAsync(_deleteCodigoByAnimalStatement.Bind(consulta.AnimalId, consulta.Codigo));
+        await _session.ExecuteAsync(_deleteCodigoByVeterinarioStatement.Bind(consulta.VeterinarioId, consulta.Codigo));
+        await _session.ExecuteAsync(_deleteConsultaByCodigoStatement.Bind(consulta.Codigo));
+    }
+
+    // Devuelve al inventario los productos registrados en la consulta y limpia su registro.
+    private async Task RestaurarStockAsync(string codigo)
+    {
+        var productos = await ObtenerProductosUsadosAsync(codigo);
+        foreach (var producto in productos)
+        {
+            await _productoService.AjustarStockAsync(producto.ProductoId, producto.CantidadUsada);
+        }
+        await _session.ExecuteAsync(_deleteConsultaProductosStatement.Bind(codigo));
     }
 
     public async Task<List<ProductoUsadoDto>> ObtenerProductosUsadosAsync(string codigo)

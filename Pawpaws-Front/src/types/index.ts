@@ -5,6 +5,8 @@ export interface Rescatista {
   correoElectronico: string;
   organizacion: string;
   zonaOperacion: string;
+  // Rescatista interno (p. ej. "Refugio"): no se ofrece como seleccionable ni se gestiona.
+  oculto: boolean;
 }
 
 export interface CrearRescatistaDto {

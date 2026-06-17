@@ -8,6 +8,7 @@ public class AnimalService : IAnimalService
 {
     private readonly Cassandra.ISession _session;
     private readonly IRescatistaService _rescatistaService;
+    private readonly IConsultaReferenceService _consultaReferenceService;
     private readonly PreparedStatement _insertByIdStatement;
     private readonly PreparedStatement _insertByRescatistaStatement;
     private readonly PreparedStatement _deleteByRescatistaStatement;
@@ -16,10 +17,11 @@ public class AnimalService : IAnimalService
     private readonly PreparedStatement _selectByIdStatement;
     private readonly PreparedStatement _selectByRescatistaStatement;
 
-    public AnimalService(Cassandra.ISession session, IRescatistaService rescatistaService)
+    public AnimalService(Cassandra.ISession session, IRescatistaService rescatistaService, IConsultaReferenceService consultaReferenceService)
     {
         _session = session;
         _rescatistaService = rescatistaService;
+        _consultaReferenceService = consultaReferenceService;
         _insertByIdStatement = _session.Prepare("INSERT INTO animales_by_id (id, nombre, especie, peso_actual, fecha_ingreso, rescatista_id) VALUES (?, ?, ?, ?, ?, ?)");
         _insertByRescatistaStatement = _session.Prepare("INSERT INTO animales_by_rescatista (rescatista_id, id, nombre, especie, peso_actual, fecha_ingreso) VALUES (?, ?, ?, ?, ?, ?)");
         _deleteByRescatistaStatement = _session.Prepare("DELETE FROM animales_by_rescatista WHERE rescatista_id = ? AND id = ?");
@@ -109,6 +111,10 @@ public class AnimalService : IAnimalService
             return false;
         }
 
+        // Cascada cross-servicio: primero se eliminan las consultas del animal en el servicio
+        // de Consulta. Si esto falla, se propaga y el animal NO se borra (evita huérfanos).
+        await _consultaReferenceService.EliminarConsultasPorAnimalAsync(actual.Id);
+
         // Borrado físico: el animal es dato propio, no referencia compartida.
         // Se limpian ambas tablas (by_id y by_rescatista) en una sola operación.
         var batch = new BatchStatement();
@@ -116,6 +122,28 @@ public class AnimalService : IAnimalService
         batch.Add(_deleteByRescatistaStatement.Bind(actual.RescatistaId, actual.Id));
         await _session.ExecuteAsync(batch);
         return true;
+    }
+
+    public async Task<int> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId)
+    {
+        if (origenRescatistaId == destinoRescatistaId)
+        {
+            return 0;
+        }
+
+        var animales = await ObtenerPorRescatistaAsync(origenRescatistaId);
+        foreach (var animal in animales)
+        {
+            // Quitar la fila del rescatista origen y re-escribir el animal con el nuevo rescatista
+            // en ambas tablas (by_id y by_rescatista), de forma atómica por animal.
+            var batch = new BatchStatement();
+            batch.Add(_deleteByRescatistaStatement.Bind(origenRescatistaId, animal.Id));
+            animal.RescatistaId = destinoRescatistaId;
+            AgregarUpsert(batch, animal);
+            await _session.ExecuteAsync(batch);
+        }
+
+        return animales.Count;
     }
 
     private async Task GuardarAnimalAsync(Animal animal)
