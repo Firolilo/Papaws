@@ -1,17 +1,22 @@
 using Cassandra;
 using Pawpaws.Consulta.DTOs;
+using Pawpaws.Consulta.Exceptions;
 using Pawpaws.Consulta.Models;
 
 namespace Pawpaws.Consulta.Services;
 
 public class ProductoService : IProductoService
 {
+    // Reintentos ante contención al ajustar stock con compare-and-set (LWT).
+    private const int MaxIntentosStock = 5;
+
     private readonly Cassandra.ISession _session;
     private readonly PreparedStatement _insertStatement;
     private readonly PreparedStatement _selectAllStatement;
     private readonly PreparedStatement _selectByIdStatement;
     private readonly PreparedStatement _updateStatement;
     private readonly PreparedStatement _updateStockStatement;
+    private readonly PreparedStatement _compareAndSetStockStatement;
     private readonly PreparedStatement _softDeleteStatement;
 
     public ProductoService(Cassandra.ISession session)
@@ -22,6 +27,8 @@ public class ProductoService : IProductoService
         _selectByIdStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, activo FROM productos_by_id WHERE id = ?");
         _updateStatement = _session.Prepare("UPDATE productos_by_id SET nombre = ?, tipo = ?, unidad_medida = ? WHERE id = ?");
         _updateStockStatement = _session.Prepare("UPDATE productos_by_id SET stock_disponible = ? WHERE id = ?");
+        // Ajuste condicional: solo aplica si el stock no cambió desde la lectura (anti lost-update).
+        _compareAndSetStockStatement = _session.Prepare("UPDATE productos_by_id SET stock_disponible = ? WHERE id = ? IF stock_disponible = ?");
         _softDeleteStatement = _session.Prepare("UPDATE productos_by_id SET activo = false WHERE id = ?");
     }
 
@@ -94,14 +101,31 @@ public class ProductoService : IProductoService
             return false;
         }
 
-        var nuevoStock = producto.StockDisponible + delta;
-        if (nuevoStock < 0)
+        // Compare-and-set con LWT: el ajuste solo se aplica si el stock no cambió desde que lo
+        // leímos. Sin esto, dos consultas concurrentes que descuentan stock pisarían el valor
+        // de la otra (lost update) y el inventario quedaría inflado. Ante colisión reintentamos
+        // sobre el valor vigente, que Cassandra devuelve en la fila del LWT fallido.
+        var stockActual = producto.StockDisponible;
+        for (var intento = 0; intento < MaxIntentosStock; intento++)
         {
-            throw new InvalidOperationException($"El stock del producto {producto.Nombre} no puede quedar negativo.");
+            var nuevoStock = stockActual + delta;
+            if (nuevoStock < 0)
+            {
+                throw new InvalidOperationException($"El stock del producto {producto.Nombre} no puede quedar negativo.");
+            }
+
+            var resultado = await _session.ExecuteAsync(_compareAndSetStockStatement.Bind(nuevoStock, id, stockActual));
+            var fila = resultado.First();
+            if (fila.GetValue<bool>("[applied]"))
+            {
+                return true;
+            }
+
+            // Otro proceso modificó el stock entremedio: tomamos el valor real y reintentamos.
+            stockActual = fila.GetValue<int>("stock_disponible");
         }
 
-        await _session.ExecuteAsync(_updateStockStatement.Bind(nuevoStock, id));
-        return true;
+        throw new ConflictoException($"No se pudo ajustar el stock de '{producto.Nombre}' por contención concurrente. Intente nuevamente.");
     }
 
     public async Task<bool> EliminarAsync(Guid id)

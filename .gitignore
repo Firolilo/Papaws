@@ -13,3 +13,7 @@ docs/
 
 # Logs
 *.log
+
+# Secretos locales (no commitear). Solo en la raíz: el .env del front son URLs públicas.
+/.env
+

@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Pawpaws.Reportes</RootNamespace>
     <AssemblyName>Pawpaws.Reportes</AssemblyName>
+    <UserSecretsId>papaws-reportes</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Pawpaws.Consulta</RootNamespace>
     <AssemblyName>Pawpaws.Consulta</AssemblyName>
+    <UserSecretsId>papaws-consulta</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

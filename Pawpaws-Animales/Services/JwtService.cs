@@ -22,6 +22,13 @@ public class JwtService : IJwtService
         var usuario = _options.Usuarios
             .FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
 
+        // Si la contraseña genérica no está configurada, no autenticamos a nadie: evita que
+        // una mala configuración (valor vacío) se convierta en un backdoor de password en blanco.
+        if (string.IsNullOrWhiteSpace(_options.PasswordGenerica))
+        {
+            return null;
+        }
+
         // Modelo simple: cualquier usuario semilla con la contraseña genérica única.
         if (usuario is null || password != _options.PasswordGenerica)
         {

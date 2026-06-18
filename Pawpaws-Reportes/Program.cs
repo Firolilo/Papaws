@@ -14,7 +14,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 // --- Validación de JWT (misma clave que emite el servicio de Animales) ---
-var jwtKey = builder.Configuration["Auth:Jwt:Key"] ?? throw new InvalidOperationException("Falta Auth:Jwt:Key.");
+var jwtKey = builder.Configuration["Auth:Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
+    throw new InvalidOperationException("Auth:Jwt:Key no está configurada o es demasiado corta (mínimo 32 caracteres). Definí PAPAWS_JWT_KEY en el entorno (ver .env.example).");
 var jwtIssuer = builder.Configuration["Auth:Jwt:Issuer"] ?? "papaws";
 var jwtAudience = builder.Configuration["Auth:Jwt:Audience"] ?? "papaws";
 
