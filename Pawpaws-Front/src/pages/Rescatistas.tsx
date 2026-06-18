@@ -8,6 +8,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../components/Toast";
 import { animalesApi, rescatistasApi } from "../api/endpoints";
 import type { Animal, CrearRescatistaDto, Rescatista } from "../types";
 
@@ -21,6 +22,7 @@ const emptyForm: CrearRescatistaDto = {
 
 export function Rescatistas() {
   const { puedeGestionarAnimales } = useAuth();
+  const toast = useToast();
   const { data, error, loading, reload } = useFetch(() =>
     rescatistasApi.list()
   );
@@ -71,7 +73,9 @@ export function Rescatistas() {
     setDeleting(true);
     setDeleteError(null);
     try {
+      const nombre = toDelete.nombreCompleto;
       await rescatistasApi.remove(toDelete.id, reasignarA || undefined);
+      toast.success(`Se eliminó a ${nombre} y se reasignaron sus animales.`);
       setToDelete(null);
       reload();
     } catch (err: any) {
@@ -108,8 +112,10 @@ export function Rescatistas() {
     try {
       if (editing) {
         await rescatistasApi.update(editing.id, form);
+        toast.success(`Se actualizó a ${form.nombreCompleto}.`);
       } else {
         await rescatistasApi.create(form);
+        toast.success(`${form.nombreCompleto} se registró como rescatista.`);
       }
       setOpen(false);
       reload();

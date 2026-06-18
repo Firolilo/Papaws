@@ -8,6 +8,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../components/Toast";
 import { veterinariosApi } from "../api/endpoints";
 import type { CrearVeterinarioDto, Veterinario } from "../types";
 
@@ -18,6 +19,7 @@ const emptyForm: CrearVeterinarioDto = {
 };
 
 export function Veterinarios() {
+  const toast = useToast();
   const { data, error, loading, reload } = useFetch(() =>
     veterinariosApi.list()
   );
@@ -53,8 +55,10 @@ export function Veterinarios() {
     try {
       if (editing) {
         await veterinariosApi.update(editing.id, form);
+        toast.success(`Se actualizó a ${form.nombreCompleto}.`);
       } else {
         await veterinariosApi.create(form);
+        toast.success(`${form.nombreCompleto} se sumó al equipo.`);
       }
       setOpen(false);
       reload();
@@ -199,7 +203,9 @@ export function Veterinarios() {
         confirmLabel="Eliminar"
         onConfirm={async () => {
           if (toDelete) {
+            const nombre = toDelete.nombreCompleto;
             await veterinariosApi.remove(toDelete.id);
+            toast.success(`Se dio de baja a ${nombre}.`);
             reload();
           }
         }}

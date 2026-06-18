@@ -1,11 +1,13 @@
 import { Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
+import { ToastProvider } from "./components/Toast";
 import { ProtectedRoute, RoleRoute } from "./auth/guards";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Rescatistas } from "./pages/Rescatistas";
 import { Animales } from "./pages/Animales";
+import { AnimalDetalle } from "./pages/AnimalDetalle";
 import { Veterinarios } from "./pages/Veterinarios";
 import { Servicios } from "./pages/Servicios";
 import { Productos } from "./pages/Productos";
@@ -15,16 +17,18 @@ import { Reportes } from "./pages/Reportes";
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            {/* Lectura de animales/rescatistas: cualquier rol autenticado */}
-            <Route path="rescatistas" element={<Rescatistas />} />
-            <Route path="animales" element={<Animales />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              {/* Lectura de animales/rescatistas: cualquier rol autenticado */}
+              <Route path="rescatistas" element={<Rescatistas />} />
+              <Route path="animales" element={<Animales />} />
+              <Route path="animales/:id" element={<AnimalDetalle />} />
 
             {/* Reportes: cualquier rol autenticado */}
             <Route path="reportes" element={<Reportes />} />
@@ -40,10 +44,11 @@ export default function App() {
               <Route path="productos" element={<Productos />} />
               <Route path="consultas" element={<Consultas />} />
               <Route path="consultas/:codigo" element={<ConsultaDetalle />} />
+              </Route>
             </Route>
           </Route>
-        </Route>
-      </Routes>
-    </AuthProvider>
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

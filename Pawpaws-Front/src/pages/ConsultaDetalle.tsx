@@ -21,6 +21,7 @@ import { ServicioPicker } from "../components/ServicioPicker";
 import { Modal } from "../components/Modal";
 import { Badge, estadoTone } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../components/Toast";
 import {
   animalesApi,
   consultasApi,
@@ -46,6 +47,7 @@ function toLocalDatetime(iso: string): string {
 export function ConsultaDetalle() {
   const { codigo = "" } = useParams();
   const decoded = decodeURIComponent(codigo);
+  const toast = useToast();
 
   const consulta = useFetch(() => consultasApi.get(decoded), [decoded]);
   const animales = useFetch(() => animalesApi.list());
@@ -148,6 +150,7 @@ export function ConsultaDetalle() {
     setDiagError(null);
     try {
       await consultasApi.registrarDiagnostico(decoded, diag);
+      toast.success("Diagnóstico registrado. La consulta quedó completada.");
       consulta.reload();
       setDiag({ diagnostico: "", indicacionesSeguimiento: "" });
     } catch (err: any) {
@@ -175,6 +178,7 @@ export function ConsultaDetalle() {
     setProdError(null);
     try {
       await consultasApi.registrarProductos(decoded, usados);
+      toast.success("Productos registrados y stock descontado.");
       productos.reload();
       consulta.reload();
       setUsados([]);
@@ -191,6 +195,7 @@ export function ConsultaDetalle() {
     setEstadoError(null);
     try {
       await consultasApi.cambiarEstado(decoded, { estado: estadoForm });
+      toast.success(`Estado actualizado a ${estadoForm}.`);
       consulta.reload();
       setEstadoOpen(false);
     } catch (err: any) {
@@ -208,6 +213,7 @@ export function ConsultaDetalle() {
       await consultasApi.reprogramar(decoded, {
         fechaHora: new Date(reprogForm).toISOString(),
       });
+      toast.success("Consulta reprogramada.");
       consulta.reload();
       setReprogOpen(false);
     } catch (err: any) {
@@ -224,6 +230,7 @@ export function ConsultaDetalle() {
       await consultasApi.actualizarObservaciones(decoded, {
         observaciones: obsForm,
       });
+      toast.success("Observaciones guardadas.");
       consulta.reload();
       setEditObs(false);
     } catch (err: any) {
@@ -258,6 +265,7 @@ export function ConsultaDetalle() {
         observaciones: editForm.observaciones,
         servicioIds: editForm.servicioIds,
       });
+      toast.success("Consulta actualizada.");
       consulta.reload();
       setEditOpen(false);
     } catch (err: any) {
@@ -272,6 +280,7 @@ export function ConsultaDetalle() {
     setAccionError(null);
     try {
       await consultasApi.cambiarEstado(decoded, { estado: "Confirmada" });
+      toast.success("Consulta confirmada.");
       consulta.reload();
     } catch (err: any) {
       setAccionError(err.message);
@@ -873,6 +882,7 @@ export function ConsultaDetalle() {
               await consultasApi.cambiarEstado(decoded, {
                 estado: "Cancelada",
               });
+              toast.info("Consulta cancelada. Se devolvió el stock al inventario.");
               consulta.reload();
             }}
             onClose={() => setCancelOpen(false)}

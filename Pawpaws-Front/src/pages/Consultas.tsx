@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  ChevronRight,
+  Search,
+  CalendarDays,
+  List as ListIcon,
+} from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input, Textarea } from "../components/Field";
@@ -10,13 +16,14 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, estadoTone } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../components/Toast";
 import {
   animalesApi,
   consultasApi,
   serviciosApi,
   veterinariosApi,
 } from "../api/endpoints";
-import type { CrearConsultaDto, EstadoConsulta } from "../types";
+import type { Animal, Consulta, CrearConsultaDto, EstadoConsulta, Veterinario } from "../types";
 
 const estados: EstadoConsulta[] = [
   "Pendiente",
@@ -49,6 +56,7 @@ const emptyForm = (): CrearConsultaDto => ({
 });
 
 export function Consultas() {
+  const toast = useToast();
   const consultas = useFetch(() => consultasApi.list());
   const animales = useFetch(() => animalesApi.list());
   const veterinarios = useFetch(() => veterinariosApi.list());
@@ -59,6 +67,9 @@ export function Consultas() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [estadoFilter, setEstadoFilter] = useState<string>("");
+  const [vetFilter, setVetFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<"lista" | "agenda">("lista");
 
   const animalesById = useMemo(
     () => Object.fromEntries((animales.data ?? []).map((a) => [a.id, a])),
@@ -70,20 +81,61 @@ export function Consultas() {
     [veterinarios.data]
   );
 
+  const vetFilterOptions = useMemo(
+    () => [
+      { value: "", label: "Todos los veterinarios" },
+      ...(veterinarios.data ?? []).map((v) => ({
+        value: v.id,
+        label: v.nombreCompleto,
+        hint: v.especialidadPrincipal,
+      })),
+    ],
+    [veterinarios.data]
+  );
+
   const filtered = useMemo(() => {
     const cs = consultas.data ?? [];
     // Ocultar consultas huérfanas: su animal ya no existe (fue eliminado).
     const conAnimal = animales.data
       ? cs.filter((c) => animalesById[c.animalId])
       : cs;
-    const list = estadoFilter
-      ? conAnimal.filter((c) => c.estado === estadoFilter)
-      : conAnimal;
+    const term = search.trim().toLowerCase();
+    const list = conAnimal.filter((c) => {
+      if (estadoFilter && c.estado !== estadoFilter) return false;
+      if (vetFilter && c.veterinarioId !== vetFilter) return false;
+      if (term) {
+        const animal = animalesById[c.animalId];
+        const haystack = `${c.codigo} ${animal?.nombre ?? ""} ${
+          animal?.especie ?? ""
+        }`.toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
     return [...list].sort(
       (a, b) =>
         new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime()
     );
-  }, [consultas.data, animales.data, animalesById, estadoFilter]);
+  }, [
+    consultas.data,
+    animales.data,
+    animalesById,
+    estadoFilter,
+    vetFilter,
+    search,
+  ]);
+
+  // Turnos de hoy: pendientes/confirmadas con fecha de hoy (para el resumen de agenda).
+  const turnosHoy = useMemo(
+    () =>
+      (consultas.data ?? []).filter(
+        (c) =>
+          (c.estado === "Pendiente" || c.estado === "Confirmada") &&
+          dayDiff(new Date(c.fechaHora)) === 0 &&
+          animalesById[c.animalId]
+      ).length,
+    [consultas.data, animalesById]
+  );
 
   function openCreate() {
     setForm(emptyForm());
@@ -110,6 +162,7 @@ export function Consultas() {
         ...form,
         fechaHora: new Date(form.fechaHora).toISOString(),
       });
+      toast.success(`Consulta ${form.codigo} agendada.`);
       setOpen(false);
       consultas.reload();
     } catch (err: any) {
@@ -151,20 +204,59 @@ export function Consultas() {
 
       {!loading && consultas.data && (
         <>
-          <div className="flex gap-2 mb-5 flex-wrap">
-            <FilterChip
-              label="Todas"
-              active={!estadoFilter}
-              onClick={() => setEstadoFilter("")}
-            />
-            {estados.map((e) => (
+          <div className="flex flex-col gap-3 mb-5">
+            <div className="flex gap-2 flex-wrap items-center">
               <FilterChip
-                key={e}
-                label={e}
-                active={estadoFilter === e}
-                onClick={() => setEstadoFilter(e)}
+                label="Todas"
+                active={!estadoFilter}
+                onClick={() => setEstadoFilter("")}
               />
-            ))}
+              {estados.map((e) => (
+                <FilterChip
+                  key={e}
+                  label={e}
+                  active={estadoFilter === e}
+                  onClick={() => setEstadoFilter(e)}
+                />
+              ))}
+              <div className="ml-auto inline-flex rounded-full bg-bone-100 p-1">
+                <ViewToggle
+                  active={view === "lista"}
+                  onClick={() => setView("lista")}
+                  icon={<ListIcon size={14} />}
+                  label="Lista"
+                />
+                <ViewToggle
+                  active={view === "agenda"}
+                  onClick={() => setView("agenda")}
+                  icon={<CalendarDays size={14} />}
+                  label="Agenda"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500/60"
+                />
+                <input
+                  placeholder="Buscar por código, animal o especie…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-white border border-moss-200/50 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-moss-500"
+                />
+              </div>
+              <div className="sm:w-64">
+                <Combobox
+                  value={vetFilter}
+                  onChange={setVetFilter}
+                  options={vetFilterOptions}
+                  placeholder="Todos los veterinarios"
+                  searchPlaceholder="Buscar veterinario…"
+                />
+              </div>
+            </div>
           </div>
 
           {filtered.length === 0 ? (
@@ -179,6 +271,13 @@ export function Consultas() {
                 }
               />
             </Card>
+          ) : view === "agenda" ? (
+            <Agenda
+              consultas={filtered}
+              animalesById={animalesById}
+              vetsById={vetsById}
+              turnosHoy={turnosHoy}
+            />
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {filtered.map((c) => {
@@ -369,5 +468,159 @@ function FilterChip({
     >
       {label}
     </button>
+  );
+}
+
+function ViewToggle({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+        active
+          ? "bg-white text-moss-800 shadow-soft"
+          : "text-ink-500 hover:text-moss-800"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// ── Agenda: agrupa las consultas por cercanía temporal (qué tengo hoy / esta semana) ──
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+/** Días de diferencia (en días-calendario) entre una fecha y hoy. 0 = hoy, 1 = mañana, -1 = ayer. */
+function dayDiff(target: Date): number {
+  const hoy = startOfDay(new Date()).getTime();
+  const t = startOfDay(target).getTime();
+  return Math.round((t - hoy) / 86_400_000);
+}
+
+interface AgendaProps {
+  consultas: Consulta[];
+  animalesById: Record<string, Animal>;
+  vetsById: Record<string, Veterinario>;
+  turnosHoy: number;
+}
+
+const BUCKETS = [
+  { key: "hoy", label: "Hoy", test: (d: number) => d === 0 },
+  { key: "manana", label: "Mañana", test: (d: number) => d === 1 },
+  { key: "semana", label: "Esta semana", test: (d: number) => d >= 2 && d <= 7 },
+  { key: "adelante", label: "Más adelante", test: (d: number) => d > 7 },
+  { key: "anteriores", label: "Anteriores", test: (d: number) => d < 0 },
+];
+
+function Agenda({ consultas, animalesById, vetsById, turnosHoy }: AgendaProps) {
+  const grupos = BUCKETS.map((bucket) => {
+    const items = consultas
+      .filter((c) => bucket.test(dayDiff(new Date(c.fechaHora))))
+      .sort((a, b) => {
+        const ta = new Date(a.fechaHora).getTime();
+        const tb = new Date(b.fechaHora).getTime();
+        // Las pasadas se muestran de la más reciente a la más vieja; el resto, cronológico.
+        return bucket.key === "anteriores" ? tb - ta : ta - tb;
+      });
+    return { ...bucket, items };
+  }).filter((g) => g.items.length > 0);
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5 bg-gradient-to-br from-moss-700 to-moss-800 text-white border-0">
+        <p className="font-hand text-2xl text-clay-300 leading-none">la agenda de hoy</p>
+        <p className="font-display text-3xl mt-1">
+          {turnosHoy === 0
+            ? "Sin turnos para hoy"
+            : `${turnosHoy} turno${turnosHoy === 1 ? "" : "s"} para hoy`}
+        </p>
+        <p className="text-[13px] text-bone-200/90 mt-1">
+          {new Date().toLocaleDateString("es", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
+        </p>
+      </Card>
+
+      {grupos.map((g) => (
+        <div key={g.key}>
+          <div className="flex items-center gap-2 mb-2.5">
+            <h3 className="font-display text-xl text-moss-800">{g.label}</h3>
+            <span className="text-[11px] font-mono text-ink-500 bg-bone-100 rounded-full px-2 py-0.5">
+              {g.items.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            {g.items.map((c) => {
+              const animal = animalesById[c.animalId];
+              const vet = vetsById[c.veterinarioId];
+              const date = new Date(c.fechaHora);
+              return (
+                <Link
+                  key={c.codigo}
+                  to={`/consultas/${encodeURIComponent(c.codigo)}`}
+                  className="group"
+                >
+                  <Card className="px-4 py-3 hover:border-moss-400 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 shrink-0 text-center">
+                        <p className="font-mono text-base text-moss-800 font-semibold leading-none">
+                          {date.toLocaleTimeString("es", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        {g.key !== "hoy" && g.key !== "manana" && (
+                          <p className="text-[10px] uppercase tracking-wide text-ink-500 mt-1">
+                            {date.toLocaleDateString("es", {
+                              day: "2-digit",
+                              month: "short",
+                            })}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border-l border-moss-100 pl-4 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge tone={estadoTone(c.estado)}>{c.estado}</Badge>
+                          <span className="font-medium text-moss-800 truncate">
+                            {animal?.nombre ?? "Animal"}
+                          </span>
+                          <span className="text-ink-500/60 text-sm truncate">
+                            · {animal?.especie ?? "—"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-500 truncate mt-0.5">
+                          Dr/a. {vet?.nombreCompleto ?? "Veterinario"}
+                        </p>
+                      </div>
+                      <ChevronRight
+                        size={18}
+                        className="text-ink-500/40 group-hover:text-moss-700 transition-colors shrink-0"
+                      />
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

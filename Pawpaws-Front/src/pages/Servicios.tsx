@@ -7,6 +7,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../components/Toast";
 import { serviciosApi } from "../api/endpoints";
 import type { CrearServicioDto, Servicio } from "../types";
 
@@ -24,6 +25,7 @@ const fmt = new Intl.NumberFormat("es-CO", {
 });
 
 export function Servicios() {
+  const toast = useToast();
   const { data, error, loading, reload } = useFetch(() => serviciosApi.list());
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Servicio | null>(null);
@@ -58,8 +60,10 @@ export function Servicios() {
     try {
       if (editing) {
         await serviciosApi.update(editing.id, form);
+        toast.success(`Se actualizó el servicio “${form.nombre}”.`);
       } else {
         await serviciosApi.create(form);
+        toast.success(`Servicio “${form.nombre}” creado.`);
       }
       setOpen(false);
       reload();
@@ -219,7 +223,9 @@ export function Servicios() {
         confirmLabel="Eliminar"
         onConfirm={async () => {
           if (toDelete) {
+            const nombre = toDelete.nombre;
             await serviciosApi.remove(toDelete.id);
+            toast.success(`Se dio de baja el servicio “${nombre}”.`);
             reload();
           }
         }}

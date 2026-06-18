@@ -8,6 +8,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../components/Toast";
 import { productosApi } from "../api/endpoints";
 import type { CrearProductoDto, Producto } from "../types";
 
@@ -19,6 +20,7 @@ const emptyForm: CrearProductoDto = {
 };
 
 export function Productos() {
+  const toast = useToast();
   const { data, error, loading, reload } = useFetch(() => productosApi.list());
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Producto | null>(null);
@@ -70,8 +72,10 @@ export function Productos() {
           tipo: form.tipo,
           unidadMedida: form.unidadMedida,
         });
+        toast.success(`Se actualizó “${form.nombre}”.`);
       } else {
         await productosApi.create(form);
+        toast.success(`Producto “${form.nombre}” agregado al inventario.`);
       }
       setOpen(false);
       reload();
@@ -96,6 +100,7 @@ export function Productos() {
       await productosApi.establecerStock(stockTarget.id, {
         stockDisponible: nuevo,
       });
+      toast.success(`Stock de “${stockTarget.nombre}” actualizado a ${nuevo}.`);
       setStockTarget(null);
       reload();
     } catch (err: any) {
@@ -332,7 +337,9 @@ export function Productos() {
         confirmLabel="Eliminar"
         onConfirm={async () => {
           if (toDelete) {
+            const nombre = toDelete.nombre;
             await productosApi.remove(toDelete.id);
+            toast.success(`Se dio de baja “${nombre}”.`);
             reload();
           }
         }}

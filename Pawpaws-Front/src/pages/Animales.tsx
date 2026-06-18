@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronRight, Plus, Search } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
@@ -9,6 +10,7 @@ import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../components/Toast";
 import { animalesApi, rescatistasApi } from "../api/endpoints";
 import type { Animal, CrearAnimalDto } from "../types";
 
@@ -21,6 +23,7 @@ const emptyForm: CrearAnimalDto = {
 
 export function Animales() {
   const { puedeGestionarAnimales } = useAuth();
+  const toast = useToast();
   const animales = useFetch(() => animalesApi.list());
   const rescatistas = useFetch(() => rescatistasApi.list());
   const [open, setOpen] = useState(false);
@@ -30,6 +33,7 @@ export function Animales() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [especieFilter, setEspecieFilter] = useState("");
+  const [rescatistaFilter, setRescatistaFilter] = useState("");
   const [toDelete, setToDelete] = useState<Animal | null>(null);
 
   const rescById = useMemo(
@@ -65,17 +69,29 @@ export function Animales() {
     [rescatistas.data]
   );
 
+  // Filtro por rescatista: solo los que tienen al menos un animal ingresado.
+  const rescatistaFilterOptions = useMemo(() => {
+    const conAnimales = new Set((animales.data ?? []).map((a) => a.rescatistaId));
+    return [
+      { value: "", label: "Todos los rescatistas" },
+      ...(rescatistas.data ?? [])
+        .filter((r) => conAnimales.has(r.id))
+        .map((r) => ({ value: r.id, label: r.nombreCompleto })),
+    ];
+  }, [rescatistas.data, animales.data]);
+
   const filtered = useMemo(() => {
     const term = filter.toLowerCase();
     return (animales.data ?? []).filter(
       (a) =>
         (especieFilter ? a.especie === especieFilter : true) &&
+        (rescatistaFilter ? a.rescatistaId === rescatistaFilter : true) &&
         (term
           ? a.nombre.toLowerCase().includes(term) ||
             a.especie.toLowerCase().includes(term)
           : true)
     );
-  }, [animales.data, filter, especieFilter]);
+  }, [animales.data, filter, especieFilter, rescatistaFilter]);
 
   function openCreate() {
     setEditing(null);
@@ -107,8 +123,10 @@ export function Animales() {
     try {
       if (editing) {
         await animalesApi.update(editing.id, form);
+        toast.success(`Se actualizó la ficha de ${form.nombre}.`);
       } else {
         await animalesApi.create(form);
+        toast.success(`${form.nombre} ingresó al centro.`);
       }
       setOpen(false);
       animales.reload();
@@ -154,13 +172,22 @@ export function Animales() {
                 className="w-full bg-white border border-moss-200/50 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-moss-500"
               />
             </div>
-            <div className="sm:w-60">
+            <div className="sm:w-52">
               <Combobox
                 value={especieFilter}
                 onChange={setEspecieFilter}
                 options={especieOptions}
                 placeholder="Todas las especies"
                 searchPlaceholder="Buscar especie…"
+              />
+            </div>
+            <div className="sm:w-56">
+              <Combobox
+                value={rescatistaFilter}
+                onChange={setRescatistaFilter}
+                options={rescatistaFilterOptions}
+                placeholder="Todos los rescatistas"
+                searchPlaceholder="Buscar rescatista…"
               />
             </div>
           </div>
@@ -210,14 +237,21 @@ export function Animales() {
                         className="hover:bg-bone-50/60 transition-colors"
                       >
                         <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
+                          <Link
+                            to={`/animales/${a.id}`}
+                            className="group flex items-center gap-3 -my-1 py-1"
+                          >
                             <div className="w-8 h-8 rounded-full bg-clay-100 text-clay-600 font-display flex items-center justify-center text-sm">
                               {a.nombre.charAt(0)}
                             </div>
-                            <span className="font-medium text-moss-800">
+                            <span className="font-medium text-moss-800 group-hover:text-moss-600 group-hover:underline decoration-moss-300 underline-offset-2">
                               {a.nombre}
                             </span>
-                          </div>
+                            <ChevronRight
+                              size={14}
+                              className="text-ink-500/30 group-hover:text-moss-600 transition-colors"
+                            />
+                          </Link>
                         </td>
                         <td className="px-5 py-3.5 text-ink-500">
                           {a.especie}
@@ -343,7 +377,9 @@ export function Animales() {
         confirmLabel="Eliminar"
         onConfirm={async () => {
           if (toDelete) {
+            const nombre = toDelete.nombre;
             await animalesApi.remove(toDelete.id);
+            toast.success(`Se eliminó a ${nombre}.`);
             animales.reload();
           }
         }}

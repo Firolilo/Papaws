@@ -31,9 +31,9 @@ public class SeedController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Sembrar([FromBody] SeedConsultaDto dto)
     {
-        var existentes = await _vetService.ObtenerTodosAsync();
-        if (existentes.Count >= 6)
-            return Ok(new { sembrado = false, mensaje = "Ya existen datos en el servicio de consultas." });
+        // Sanea duplicados de siembras anteriores (deja una copia por nombre) y luego crea
+        // solo lo que falte. Así el seed es idempotente: ejecutarlo N veces deja el mismo estado.
+        await DepurarDuplicadosAsync();
 
         // ── Veterinarios ──────────────────────────────────────────────────────
         var vetsData = new (string Nombre, string Tel, string Especialidad)[]
@@ -46,9 +46,18 @@ public class SeedController : ControllerBase
             ("Dra. Isabel Mora",    "555-2006", "Nutrición"),
         };
 
+        var vetsExistentes = (await _vetService.ObtenerTodosAsync())
+            .GroupBy(v => v.NombreCompleto, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
         var vetIds = new List<Guid>();
         foreach (var (nombre, tel, esp) in vetsData)
         {
+            if (vetsExistentes.TryGetValue(nombre, out var existenteId))
+            {
+                vetIds.Add(existenteId);
+                continue;
+            }
             var v = await _vetService.CrearAsync(new CrearVeterinarioDto
             {
                 NombreCompleto        = nombre,
@@ -74,9 +83,18 @@ public class SeedController : ControllerBase
             ("Ecografía",          "Ultrasonido abdominal diagnóstico",            40,  70000m),
         };
 
+        var serviciosExistentes = (await _servicioService.ObtenerTodosAsync())
+            .GroupBy(s => s.Nombre, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
         var servicioIds = new List<Guid>();
         foreach (var (nombre, desc, min, precio) in serviciosData)
         {
+            if (serviciosExistentes.TryGetValue(nombre, out var existenteId))
+            {
+                servicioIds.Add(existenteId);
+                continue;
+            }
             var s = await _servicioService.CrearAsync(new CrearServicioDto
             {
                 Nombre                  = nombre,
@@ -102,8 +120,14 @@ public class SeedController : ControllerBase
             ("Suero Fisiológico",    "Líquido",       "Frasco",       5),
         };
 
+        var productosExistentes = new HashSet<string>(
+            (await _productoService.ObtenerTodosAsync()).Select(p => p.Nombre),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (var (nombre, tipo, unidad, stock) in productosData)
         {
+            if (productosExistentes.Contains(nombre))
+                continue;
             await _productoService.CrearAsync(new CrearProductoDto
             {
                 Nombre          = nombre,
@@ -173,5 +197,40 @@ public class SeedController : ControllerBase
             sembrado = true,
             mensaje  = $"Datos sembrados: {vetIds.Count} vets, {servicioIds.Count} servicios, {productosData.Length} productos, {consultasData.Length} consultas.",
         });
+    }
+
+    /// <summary>
+    /// Sanea duplicados creados por siembras anteriores: para productos, servicios y
+    /// veterinarios deja una sola copia por nombre y da de baja (borrado lógico) las
+    /// sobrantes. En productos conserva la de mayor stock para no perder inventario.
+    /// </summary>
+    private async Task DepurarDuplicadosAsync()
+    {
+        var productos = await _productoService.ObtenerTodosAsync();
+        foreach (var grupo in productos
+            .GroupBy(p => p.Nombre, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1))
+        {
+            foreach (var sobrante in grupo.OrderByDescending(p => p.StockDisponible).Skip(1))
+                await _productoService.EliminarAsync(sobrante.Id);
+        }
+
+        var servicios = await _servicioService.ObtenerTodosAsync();
+        foreach (var grupo in servicios
+            .GroupBy(s => s.Nombre, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1))
+        {
+            foreach (var sobrante in grupo.OrderBy(s => s.Id).Skip(1))
+                await _servicioService.EliminarAsync(sobrante.Id);
+        }
+
+        var veterinarios = await _vetService.ObtenerTodosAsync();
+        foreach (var grupo in veterinarios
+            .GroupBy(v => v.NombreCompleto, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1))
+        {
+            foreach (var sobrante in grupo.OrderBy(v => v.Id).Skip(1))
+                await _vetService.EliminarAsync(sobrante.Id);
+        }
     }
 }

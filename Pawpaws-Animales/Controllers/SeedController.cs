@@ -22,9 +22,10 @@ public class SeedController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Sembrar()
     {
-        var existentes = await _rescatistaService.ObtenerTodosAsync();
-        if (existentes.Count >= 8)
-            return Ok(new { sembrado = false, mensaje = "Ya existen datos.", animalIds = Array.Empty<string>() });
+        // Idempotente: un rescatista ya existente (mismo correo) se reutiliza en vez de duplicarse.
+        var rescatistasExistentes = (await _rescatistaService.ObtenerTodosAsync())
+            .GroupBy(r => r.CorreoElectronico, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
 
         var rescatistas = new[]
         {
@@ -41,6 +42,11 @@ public class SeedController : ControllerBase
         var rIds = new List<Guid>();
         foreach (var dto in rescatistas)
         {
+            if (rescatistasExistentes.TryGetValue(dto.CorreoElectronico, out var existenteId))
+            {
+                rIds.Add(existenteId);
+                continue;
+            }
             var r = await _rescatistaService.CrearAsync(dto);
             rIds.Add(r.Id);
         }
@@ -69,23 +75,31 @@ public class SeedController : ControllerBase
             ("Chisco",      "Chinchilla",  0.6m, 2),
         };
 
-        var animalIds = new List<string>();
-        foreach (var (nombre, especie, peso, ri) in animalesData)
+        // Los nombres de animal NO son únicos (puede haber dos "Luna"), así que no se pueden
+        // deduplicar por nombre. Para evitar duplicar la carga demo, solo se siembran si todavía
+        // no hay animales; si ya existen, se devuelven sus IDs para que el seed de consultas opere.
+        var animalesActuales = await _animalService.ObtenerTodosAsync();
+        var animalIds = animalesActuales.Select(a => a.Id.ToString()).ToList();
+
+        if (animalesActuales.Count == 0)
         {
-            var a = await _animalService.CrearAsync(new CrearAnimalDto
+            foreach (var (nombre, especie, peso, ri) in animalesData)
             {
-                Nombre       = nombre,
-                Especie      = especie,
-                PesoActual   = peso,
-                RescatistaId = rIds[ri % rIds.Count],
-            });
-            animalIds.Add(a.Id.ToString());
+                var a = await _animalService.CrearAsync(new CrearAnimalDto
+                {
+                    Nombre       = nombre,
+                    Especie      = especie,
+                    PesoActual   = peso,
+                    RescatistaId = rIds[ri % rIds.Count],
+                });
+                animalIds.Add(a.Id.ToString());
+            }
         }
 
         return Ok(new
         {
             sembrado = true,
-            mensaje  = $"Sembrados {rIds.Count} rescatistas y {animalIds.Count} animales.",
+            mensaje  = $"Rescatistas: {rIds.Count}. Animales: {animalIds.Count}.",
             animalIds,
         });
     }
