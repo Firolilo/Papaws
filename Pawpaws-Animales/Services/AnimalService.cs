@@ -65,13 +65,21 @@ public class AnimalService : IAnimalService
             throw new InvalidOperationException("El rescatista asociado no existe.");
         }
 
+        // Fecha de ingreso: la enviada (si el animal llegó días atrás) o la actual. No se admite
+        // una fecha futura.
+        var fechaIngreso = dto.FechaIngreso ?? DateTime.UtcNow;
+        if (fechaIngreso > DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("La fecha de ingreso no puede ser futura.");
+        }
+
         var animal = new Animal
         {
             Id = Guid.NewGuid(),
             Nombre = dto.Nombre,
             Especie = dto.Especie,
             PesoActual = dto.PesoActual,
-            FechaIngreso = DateTime.UtcNow,
+            FechaIngreso = fechaIngreso,
             RescatistaId = dto.RescatistaId
         };
 
@@ -244,6 +252,12 @@ public class AnimalService : IAnimalService
         else
         {
             // Disponible / EnTratamiento: estados internos del refugio. No tocan el historial.
+            // Un animal adoptado no puede volver directo a un estado interno: primero debe
+            // registrarse su devolución al refugio.
+            if (animal.Estado.Equals("Adoptado", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Un animal adoptado primero debe registrarse como devuelto al refugio antes de volver a un estado interno.");
+            }
             animal.Estado = normalizado;
             animal.FechaSalida = null;
             animal.AdoptanteRescatistaId = null;

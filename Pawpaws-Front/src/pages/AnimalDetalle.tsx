@@ -262,19 +262,17 @@ export function AnimalDetalle() {
     }
   }
 
-  // Opciones de estado según el estado actual: solo se puede "Devolver" lo adoptado.
+  // Opciones de estado según el estado actual. Un animal adoptado NO puede volver directo a
+  // "Disponible"/"En tratamiento": primero hay que registrar que fue devuelto al refugio.
   const estadoOptions = useMemo(() => {
-    const base = [
+    if (animal.data?.estado === "Adoptado") {
+      return [{ value: "Devuelto", label: "Devuelto al refugio" }];
+    }
+    return [
       { value: "Disponible", label: "Disponible" },
       { value: "EnTratamiento", label: "En tratamiento" },
+      { value: "Adoptado", label: "Adoptado" },
     ];
-    if (animal.data?.estado === "Adoptado") {
-      return [
-        { value: "Devuelto", label: "Devuelto al refugio" },
-        ...base,
-      ];
-    }
-    return [...base, { value: "Adoptado", label: "Adoptado" }];
   }, [animal.data?.estado]);
 
   // Genera la guía completa del animal y la descarga como PDF (nombre: "<animal> - historial.pdf").

@@ -85,6 +85,8 @@ export interface CrearAnimalDto {
   especie: string;
   pesoActual: number;
   rescatistaId: string;
+  // Opcional: si se omite, el backend usa la fecha/hora actual.
+  fechaIngreso?: string | null;
 }
 
 export interface Veterinario {

@@ -107,23 +107,35 @@ export async function descargarPdf(d: DocumentoPdf): Promise<void> {
   let y = bandaY + bandaH + 26;
 
   // ── Título ───────────────────────────────────────────────────────────────
+  // jsPDF (helvetica) solo soporta WinAnsi: reemplazamos caracteres fuera de ese set
+  // (flechas, guiones largos…) para que no salgan como basura.
+  const sanear = (t: string) =>
+    t.replace(/[→➜]/g, "-").replace(/[←]/g, "-").replace(/[—–]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  const tituloLimpio = sanear(d.titulo);
+
   doc.setTextColor(...COL.deep);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text(d.titulo, margin, y);
+  // El título se achica hasta entrar en el ancho disponible (evita que se corte).
+  let tituloFs = 22;
+  doc.setFontSize(tituloFs);
+  while (tituloFs > 12 && doc.getTextWidth(tituloLimpio) > ancho) {
+    tituloFs -= 1;
+    doc.setFontSize(tituloFs);
+  }
+  doc.text(tituloLimpio, margin, y);
   y += 16;
   if (d.subtitulo) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     doc.setTextColor(...COL.muted);
-    doc.text(d.subtitulo, margin, y);
+    doc.text(sanear(d.subtitulo), margin, y);
     y += 14;
   }
   if (d.etiqueta) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(...COL.clay);
-    doc.text(d.etiqueta.toUpperCase(), margin, y);
+    doc.text(sanear(d.etiqueta).toUpperCase(), margin, y);
     y += 12;
   }
   y += 8;

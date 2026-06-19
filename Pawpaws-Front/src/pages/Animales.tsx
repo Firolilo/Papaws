@@ -13,6 +13,7 @@ import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 import { animalesApi, rescatistasApi } from "../api/endpoints";
+import { ESPECIES_ACEPTADAS } from "../constants";
 import type { Animal, CrearAnimalDto } from "../types";
 
 const emptyForm: CrearAnimalDto = {
@@ -20,7 +21,10 @@ const emptyForm: CrearAnimalDto = {
   especie: "",
   pesoActual: 0,
   rescatistaId: "",
+  fechaIngreso: "",
 };
+
+const ESPECIE_OPTIONS = ESPECIES_ACEPTADAS.map((e) => ({ value: e, label: e }));
 
 const ESTADO_TONE: Record<string, Tone> = {
   Disponible: "blue",
@@ -128,6 +132,10 @@ export function Animales() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.especie) {
+      setSubmitError("Selecciona una especie.");
+      return;
+    }
     if (!form.rescatistaId) {
       setSubmitError("Selecciona un rescatista.");
       return;
@@ -139,7 +147,8 @@ export function Animales() {
         await animalesApi.update(editing.id, form);
         toast.success(`Se actualizó la ficha de ${form.nombre}.`);
       } else {
-        await animalesApi.create(form);
+        // Fecha vacía → null para que el backend use la fecha actual.
+        await animalesApi.create({ ...form, fechaIngreso: form.fechaIngreso || null });
         toast.success(`${form.nombre} ingresó al centro.`);
       }
       setOpen(false);
@@ -337,13 +346,13 @@ export function Animales() {
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Input
+            <Combobox
               label="Especie"
-              required
-              maxLength={80}
-              placeholder="Puma, Loro, Tortuga…"
               value={form.especie}
-              onChange={(e) => setForm({ ...form, especie: e.target.value })}
+              onChange={(v) => setForm({ ...form, especie: v })}
+              options={ESPECIE_OPTIONS}
+              placeholder="Selecciona una especie…"
+              searchPlaceholder="Buscar especie…"
             />
             <Input
               label="Peso actual"
@@ -362,6 +371,16 @@ export function Animales() {
               }
             />
           </div>
+          {!editing && (
+            <Input
+              label="Fecha de ingreso"
+              hint="opcional"
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              value={form.fechaIngreso ?? ""}
+              onChange={(e) => setForm({ ...form, fechaIngreso: e.target.value })}
+            />
+          )}
           <Combobox
             label="Rescatista"
             value={form.rescatistaId}

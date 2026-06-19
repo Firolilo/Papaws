@@ -66,7 +66,7 @@ public class DatosPruebaService : IDatosPruebaService
                 await _animalService.CrearAsync(new CrearAnimalDto
                 {
                     Nombre = faker.Name.FirstName(),
-                    Especie = faker.PickRandom("Puma", "Loro", "Tortuga", "Oso", "Mono"),
+                    Especie = faker.PickRandom("Perro", "Gato", "Conejo", "Ave", "Loro", "Tortuga", "Hámster"),
                     PesoActual = Math.Round((decimal)faker.Random.Double(0.5, 250), 2),
                     RescatistaId = rescatista.Id
                 });

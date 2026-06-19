@@ -18,4 +18,8 @@ public class CrearAnimalDto
 
     [Required]
     public Guid RescatistaId { get; set; }
+
+    // Opcional: fecha real de ingreso (p. ej. si el animal llegó días atrás). Si no se envía,
+    // se usa la fecha/hora actual.
+    public DateTime? FechaIngreso { get; set; }
 }
