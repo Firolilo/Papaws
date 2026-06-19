@@ -16,6 +16,7 @@ import {
   productosApi, serviciosApi, organizacionesApi, reportesApi, seedApi,
 } from "../api/endpoints";
 import type { Animal, Consulta, Rescatista, Veterinario, Servicio, Producto, Organizacion } from "../types";
+import { descargarPdf } from "../utils/pdf";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -119,7 +120,7 @@ function SearchableSelect({ options, value, onChange, placeholder }: {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type InputType = "none" | "rescatista" | "animal" | "veterinario" | "servicio"
-  | "producto" | "codigo" | "texto" | "estado" | "fecha" | "zona" | "especie" | "especialidad" | "organizacion";
+  | "producto" | "codigo" | "texto" | "estado" | "fecha" | "zona" | "especie" | "especialidad" | "organizacion" | "tipoOrganizacion";
 
 interface ReportCol { key: string; label: string; render?: (v: unknown, row: Record<string, unknown>) => React.ReactNode; }
 interface ReportCfg {
@@ -188,6 +189,7 @@ const REPORTS: ReportCfg[] = [
   { id:"c2",  chebotko:"C2",  label:"Animales por rescatista",    group:"Rescatistas", desc:"Todos los animales ingresados por un rescatista.", inputType:"rescatista", inputLabel:"Rescatista", fetch:(id)=>reportesApi.c2_animalesPorRescatista(id), rows:(d:any)=>d?.animales??[], header:(d:any)=>d?{title:d.nombreRescatista,sub:`ID ${shortId(d.idRescatista)}`}:null, cols:ANIMAL_COLS },
   { id:"c19", chebotko:"C19", label:"Rescatistas por zona",       group:"Rescatistas", desc:"Todos los rescatistas activos en una zona.", inputType:"zona", inputLabel:"Zona", fetch:(zona)=>reportesApi.c19_rescatistasPorZona(zona), rows:paginaItems, cols:[{key:"idRescatista",label:"ID",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>},{key:"nombreCompleto",label:"Nombre"},{key:"telefono",label:"Teléfono"},{key:"zonaOperacion",label:"Zona"}] },
   { id:"c20", chebotko:"C20", label:"Organización → rescatistas → animales", group:"Rescatistas", desc:"Rescatistas de una organización y los animales de cada uno.", inputType:"organizacion", inputLabel:"Organización", fetch:(id)=>reportesApi.c20_organizacionDetalle(id), rows:(d:any)=>d?.filas??[], header:(d:any)=>d?{title:d.nombreOrganizacion,sub:`${d.tipo} · ${d.totalRescatistas} rescatista${d.totalRescatistas===1?"":"s"} · ${d.totalAnimales} animal${d.totalAnimales===1?"":"es"}`}:null, cols:[{key:"nombreRescatista",label:"Rescatista"},{key:"nombreAnimal",label:"Animal",render:(v)=>v?String(v):<span className="text-ink-400 italic">(sin animales)</span>},{key:"especie",label:"Especie",render:(v)=>v?<Badge tone="moss">{String(v)}</Badge>:<span className="text-ink-400">—</span>},{key:"fechaIngreso",label:"Ingreso",render:(v)=>v?fmtDate(String(v)):"—"}] },
+  { id:"c21", chebotko:"C21", label:"Rescatistas por tipo de organización", group:"Rescatistas", desc:"Voluntarios agrupados según el tipo de organización al que pertenecen.", inputType:"tipoOrganizacion", inputLabel:"Tipo de organización", fetch:(t)=>reportesApi.c21_rescatistasPorTipoOrg(t), rows:paginaItems, cols:[{key:"nombreCompleto",label:"Rescatista"},{key:"organizacion",label:"Organización",render:(v)=><Badge tone="blue">{String(v)}</Badge>},{key:"zonaOperacion",label:"Zona"},{key:"email",label:"Email"}] },
   // ANIMALES
   { id:"c3",  chebotko:"C3",  label:"Animales por especie",       group:"Animales",    desc:"Todos los animales filtrados por especie.", inputType:"especie", inputLabel:"Especie", fetch:(esp)=>reportesApi.c3_animalesPorEspecie(esp), rows:paginaItems, cols:ANIMAL_COLS },
   { id:"c4",  chebotko:"C4",  label:"Consultas por animal",       group:"Animales",    desc:"Historial de consultas de un animal.", inputType:"animal", inputLabel:"Animal", fetch:(id)=>reportesApi.c4_consultasPorAnimal(id), rows:(d:any)=>d?.consultas??[], header:(d:any)=>d?{title:d.nombreAnimal,sub:d.especie}:null, cols:[{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"nombreVeterinario",label:"Veterinario",render:(v,r)=><RefName value={v} id={(r as any).idVeterinario} />},{key:"observaciones",label:"Observaciones"}] },
@@ -213,21 +215,17 @@ const REPORTS: ReportCfg[] = [
 const GROUPS = ["Rescatistas", "Animales", "Consultas", "Veterinarios", "Servicios", "Productos"];
 // Reportes que solo consultan los servicios de Animales/Rescatistas (LecturaGlobal): visibles
 // para todos los roles. El resto llama al servicio de Consulta y requiere acceso a consultas.
-const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c20", "c3", "c17"];
+const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c20", "c21", "c3", "c17"];
 const ESTADOS = ["Pendiente", "Confirmada", "Completada", "Cancelada"];
 const ESPECIE_OPTIONS:      SelectOption[] = ["Perro","Gato","Conejo","Ave","Loro","Tortuga","Hámster","Iguana","Gecko","Serpiente","Chinchilla"].map(e=>({value:e,label:e}));
 const ZONA_OPTIONS:         SelectOption[] = ["Norte","Sur","Este","Oeste","Centro"].map(z=>({value:z,label:z}));
 const ESPECIALIDAD_OPTIONS: SelectOption[] = ["Medicina General","Cirugía","Dermatología","Odontología","Exóticos","Nutrición"].map(e=>({value:e,label:e}));
+const TIPO_ORG_OPTIONS:     SelectOption[] = ["ONG","Autoridad ambiental","Refugio","Independiente"].map(t=>({value:t,label:t}));
 
-const AUTO_RUN_TYPES: InputType[] = ["rescatista","animal","veterinario","servicio","producto","estado","especie","especialidad","zona","organizacion"];
+const AUTO_RUN_TYPES: InputType[] = ["rescatista","animal","veterinario","servicio","producto","estado","especie","especialidad","zona","organizacion","tipoOrganizacion"];
 
-// ─── Exportar reporte a PDF (impresión del navegador) ─────────────────────────
-function escHtml(v: unknown): string {
-  return String(v ?? "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/** Valor plano de una celda para el PDF: formatea fechas ISO y deja el resto como texto. */
+// ─── Exportar reporte a PDF ───────────────────────────────────────────────────
+/** Valor de texto plano de una celda para el PDF: formatea fechas ISO, deja el resto como texto. */
 function celdaPdf(col: ReportCol, row: Record<string, unknown>): string {
   const v = row[col.key];
   if (v == null || v === "") return "—";
@@ -248,55 +246,23 @@ function exportarReportePdf(
   subtitulo: string | null,
   cols: ReportCol[],
   rows: unknown[]
-) {
-  const ths = cols.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
-  const trs = rows
-    .map(
-      (r) =>
-        `<tr>${cols
-          .map((c) => `<td>${escHtml(celdaPdf(c, r as Record<string, unknown>))}</td>`)
-          .join("")}</tr>`
-    )
-    .join("");
-
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
-<title>${escHtml(chebotko)} - ${escHtml(titulo)}</title>
-<style>
-  body { font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#2b2f33; margin:32px; }
-  .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0a9396; padding-bottom:10px; }
-  .brand { font-size:22px; font-weight:800; color:#005f73; }
-  .sub { color:#5a6068; font-size:12px; }
-  h1 { font-size:24px; color:#005f73; margin:16px 0 2px; }
-  .desc { color:#5a6068; margin:0 0 4px; }
-  .chip { display:inline-block; font-family:monospace; font-weight:700; background:#e7f3f1; color:#005f73; padding:2px 8px; border-radius:6px; font-size:12px; }
-  table { border-collapse:collapse; width:100%; margin-top:14px; font-size:12.5px; }
-  th { background:#f3efe6; text-align:left; padding:7px 9px; border-bottom:2px solid #e7e0d3; color:#5a6068; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
-  td { padding:6px 9px; border-bottom:1px solid #eee; vertical-align:top; }
-  tr:nth-child(even) td { background:#faf8f3; }
-  footer { margin-top:22px; border-top:1px solid #e7e0d3; padding-top:8px; color:#9aa0a6; font-size:11px; }
-  @media print { body { margin:14mm; } }
-</style></head><body>
-  <div class="top">
-    <div><div class="brand">🐾 Papaws</div><div class="sub">Refugio &amp; cuidado animal</div></div>
-    <div class="sub">Reporte generado el ${escHtml(
-      new Date().toLocaleDateString("es", { day: "2-digit", month: "long", year: "numeric" })
-    )}</div>
-  </div>
-  <h1><span class="chip">${escHtml(chebotko)}</span> &nbsp; ${escHtml(titulo)}</h1>
-  <p class="desc">${escHtml(descripcion)}</p>
-  ${subtitulo ? `<p class="desc"><b>${escHtml(subtitulo)}</b></p>` : ""}
-  <p class="sub">${rows.length} registro${rows.length === 1 ? "" : "s"}</p>
-  <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-  <footer>Documento generado por el sistema Papaws.</footer>
-</body></html>`;
-
-  const w = window.open("", "_blank", "width=1000,height=1000");
-  if (!w) return false;
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 350);
-  return true;
+): Promise<void> {
+  return descargarPdf({
+    tituloDoc: `Reporte ${chebotko}`,
+    titulo,
+    subtitulo: descripcion,
+    etiqueta: subtitulo ?? undefined,
+    secciones: [
+      {
+        titulo: `Resultados (${rows.length} registro${rows.length === 1 ? "" : "s"})`,
+        tipo: "tabla",
+        headers: cols.map((c) => c.label),
+        filas: rows.map((r) => cols.map((c) => celdaPdf(c, r as Record<string, unknown>))),
+        vacio: "Sin resultados.",
+      },
+    ],
+    nombreArchivo: `Reporte ${chebotko} - ${titulo}`,
+  });
 }
 
 // ─── Mini table (shared in overlays) ─────────────────────────────────────────
@@ -424,6 +390,31 @@ export function Reportes() {
         fill: p.stockDisponible <= 5 ? C.clay500 : p.stockDisponible <= 15 ? C.sun400 : C.moss500,
       })),
   [productos.data]);
+
+  // Organizaciones por tipo (cuántas hay de cada tipo).
+  const orgTipoPieData = useMemo(() => {
+    const cnt: Record<string, number> = {};
+    organizacionesList.forEach((o) => (cnt[o.tipo] = (cnt[o.tipo] ?? 0) + 1));
+    return Object.entries(cnt).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [organizacionesList]);
+
+  // Rescatistas por organización (top 8).
+  const orgRescatistasBarData = useMemo(() => {
+    const nombrePorId = new Map(organizacionesList.map((o) => [o.id, o.nombre]));
+    const cnt: Record<string, number> = {};
+    rescatistasList.forEach((r) => {
+      if (!r.organizacionId) return;
+      cnt[r.organizacionId] = (cnt[r.organizacionId] ?? 0) + 1;
+    });
+    return Object.entries(cnt)
+      .map(([id, value]) => ({
+        name: (nombrePorId.get(id) ?? "?").split(" ")[0],
+        fullName: nombrePorId.get(id) ?? "?",
+        value,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [organizacionesList, rescatistasList]);
 
   // ── Overlay state ────────────────────────────────────────────────────────────
   const [overlay,      setOverlay]      = useState<OverlayKind | null>(null);
@@ -556,6 +547,7 @@ export function Reportes() {
     if (!oReport) return [];
     switch (oReport.inputType) {
       case "organizacion": return organizacionesList.map((o) => ({ value: o.id, label: `${o.nombre} · ${o.tipo}` }));
+      case "tipoOrganizacion": return TIPO_ORG_OPTIONS;
       case "rescatista":   return rescatistasList.map((r) => ({ value: r.id, label: `${r.nombreCompleto} · ${r.zonaOperacion}` }));
       case "animal":       return animalesList.map((a) => ({ value: a.id, label: `${a.nombre} (${a.especie})` }));
       case "veterinario":  return vetsList.map((v) => ({ value: v.id, label: `${v.nombreCompleto} · ${v.especialidadPrincipal}` }));
@@ -718,6 +710,50 @@ export function Reportes() {
               )}
           </Card>
         )}
+
+        {/* Pie: organizaciones por tipo */}
+        <Card className="p-6">
+          <p className="font-hand text-xl text-clay-500 leading-none">red de rescate</p>
+          <h2 className="font-display text-2xl text-moss-800 mb-1">Organizaciones por tipo</h2>
+          <p className="text-xs text-ink-400 mb-3">Cuántas organizaciones hay de cada tipo</p>
+          {orgTipoPieData.length === 0
+            ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
+            : (
+              <ResponsiveContainer width="100%" height={270}>
+                <PieChart>
+                  <Pie data={orgTipoPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={92} paddingAngle={3} dataKey="value"
+                    label={({ name, value }: any) => `${name}: ${value}`} labelLine={false} style={{ fontSize: 12 }}>
+                    {orgTipoPieData.map((_, i) => <Cell key={i} fill={RESCATISTA_PAL[i % RESCATISTA_PAL.length]} stroke="white" strokeWidth={2} />)}
+                  </Pie>
+                  <Tooltip content={<ChartTip />} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+        </Card>
+
+        {/* Bar: rescatistas por organización */}
+        <Card className="p-6">
+          <p className="font-hand text-xl text-clay-500 leading-none">red de rescate</p>
+          <h2 className="font-display text-2xl text-moss-800 mb-1">Rescatistas por organización</h2>
+          <p className="text-xs text-ink-400 mb-3">Cuántos rescatistas pertenecen a cada organización</p>
+          {orgRescatistasBarData.length === 0
+            ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
+            : (
+              <ResponsiveContainer width="100%" height={270}>
+                <BarChart data={orgRescatistasBarData} barSize={36}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e9f6f2" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,95,115,0.05)", radius: 8 }} />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                    {orgRescatistasBarData.map((_, i) => <Cell key={i} fill={RESCATISTA_PAL[i % RESCATISTA_PAL.length]} />)}
+                    <LabelList dataKey="value" position="top" style={{ fontSize: 12, fill: "#5a6068", fontWeight: 700 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+        </Card>
       </div>
 
       {/* REPORT LAUNCHER */}
@@ -841,7 +877,7 @@ export function Reportes() {
                         oHeader ? [oHeader.title, oHeader.sub].filter(Boolean).join(" · ") : null,
                         oReport.cols,
                         oRows
-                      )
+                      ).catch(() => {})
                     }
                     className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 h-8 text-xs font-semibold text-moss-700 hover:bg-moss-50 transition-colors"
                   >

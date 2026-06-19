@@ -84,6 +84,14 @@ public class AnimalesController : ControllerBase
         return Ok(eventos.ToResponse());
     }
 
+    [Authorize(Roles = Roles.LecturaAnimales)]
+    [HttpGet("{id:guid}/custodia")]
+    public async Task<IActionResult> ObtenerHistorialCustodia(Guid id)
+    {
+        var eventos = await _animalService.ObtenerEventosCustodiaAsync(id);
+        return Ok(eventos.ToResponse());
+    }
+
     [Authorize(Roles = Roles.GestionAnimales)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Eliminar(Guid id)

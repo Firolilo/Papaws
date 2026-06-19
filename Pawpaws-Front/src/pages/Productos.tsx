@@ -17,7 +17,17 @@ const emptyForm: CrearProductoDto = {
   tipo: "",
   unidadMedida: "",
   stockDisponible: 0,
+  fechaVencimiento: "",
 };
+
+// Estado de vencimiento de un producto (para badges/colores).
+function estadoVencimiento(iso?: string | null): { texto: string; tone: "red" | "sun" | "moss" } | null {
+  if (!iso) return null;
+  const dias = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+  if (dias < 0) return { texto: "Vencido", tone: "red" };
+  if (dias <= 30) return { texto: `Vence en ${dias}d`, tone: "sun" };
+  return { texto: "Vigente", tone: "moss" };
+}
 
 export function Productos() {
   const toast = useToast();
@@ -49,6 +59,9 @@ export function Productos() {
       tipo: p.tipo,
       unidadMedida: p.unidadMedida,
       stockDisponible: p.stockDisponible,
+      fechaVencimiento: p.fechaVencimiento
+        ? new Date(p.fechaVencimiento).toISOString().slice(0, 10)
+        : "",
     });
     setSubmitError(null);
     setOpen(true);
@@ -65,16 +78,20 @@ export function Productos() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const vencimiento = form.fechaVencimiento
+        ? new Date(form.fechaVencimiento).toISOString()
+        : null;
       if (editing) {
         // El stock se gestiona aparte; el PUT solo cambia datos descriptivos.
         await productosApi.update(editing.id, {
           nombre: form.nombre,
           tipo: form.tipo,
           unidadMedida: form.unidadMedida,
+          fechaVencimiento: vencimiento,
         });
         toast.success(`Se actualizó “${form.nombre}”.`);
       } else {
-        await productosApi.create(form);
+        await productosApi.create({ ...form, fechaVencimiento: vencimiento });
         toast.success(`Producto “${form.nombre}” agregado al inventario.`);
       }
       setOpen(false);
@@ -149,6 +166,7 @@ export function Productos() {
                   <th className="text-left font-semibold px-5 py-3">Producto</th>
                   <th className="text-left font-semibold px-5 py-3">Tipo</th>
                   <th className="text-left font-semibold px-5 py-3">Unidad</th>
+                  <th className="text-left font-semibold px-5 py-3">Vencimiento</th>
                   <th className="text-right font-semibold px-5 py-3">Stock</th>
                   <th className="text-left font-semibold px-5 py-3">Estado</th>
                   <th className="px-5 py-3" />
@@ -169,6 +187,21 @@ export function Productos() {
                       <td className="px-5 py-3.5 text-ink-500">{p.tipo}</td>
                       <td className="px-5 py-3.5 text-ink-500 text-[12.5px] font-mono">
                         {p.unidadMedida}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {p.fechaVencimiento ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[12.5px] text-ink-500">
+                              {new Date(p.fechaVencimiento).toLocaleDateString("es")}
+                            </span>
+                            {(() => {
+                              const v = estadoVencimiento(p.fechaVencimiento);
+                              return v ? <Badge tone={v.tone}>{v.texto}</Badge> : null;
+                            })()}
+                          </div>
+                        ) : (
+                          <span className="text-[12px] text-ink-400">No vence</span>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono">
                         {p.stockDisponible}
@@ -272,6 +305,19 @@ export function Productos() {
               }
             />
           )}
+
+          <Input
+            label="Vencimiento"
+            hint="opcional"
+            type="date"
+            value={form.fechaVencimiento ?? ""}
+            onChange={(e) =>
+              setForm({ ...form, fechaVencimiento: e.target.value })
+            }
+          />
+          <p className="text-[11px] text-ink-500 -mt-2">
+            Dejalo vacío si el producto no vence (material, instrumental, etc.).
+          </p>
 
           {submitError && <ErrorBox message={submitError} />}
 

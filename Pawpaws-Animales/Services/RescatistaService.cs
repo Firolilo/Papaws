@@ -13,6 +13,8 @@ public class RescatistaService : IRescatistaService
     private readonly PreparedStatement _selectByIdStatement;
     private readonly PreparedStatement _updateStatement;
     private readonly PreparedStatement _softDeleteStatement;
+    private readonly PreparedStatement _insertEventoOrgStatement;
+    private readonly PreparedStatement _selectEventosOrgStatement;
 
     public RescatistaService(Cassandra.ISession session, IOrganizacionService organizacionService)
     {
@@ -23,6 +25,8 @@ public class RescatistaService : IRescatistaService
         _selectByIdStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, organizacion_id, zona_operacion, activo, oculto FROM rescatistas_by_id WHERE id = ?");
         _updateStatement = _session.Prepare("UPDATE rescatistas_by_id SET nombre_completo = ?, telefono_contacto = ?, correo_electronico = ?, organizacion = ?, organizacion_id = ?, zona_operacion = ? WHERE id = ?");
         _softDeleteStatement = _session.Prepare("UPDATE rescatistas_by_id SET activo = false WHERE id = ?");
+        _insertEventoOrgStatement = _session.Prepare("INSERT INTO eventos_organizacion_by_rescatista (rescatista_id, fecha, tipo, org_anterior_id, org_anterior_nombre, org_nueva_id, org_nueva_nombre) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        _selectEventosOrgStatement = _session.Prepare("SELECT rescatista_id, fecha, tipo, org_anterior_id, org_anterior_nombre, org_nueva_id, org_nueva_nombre FROM eventos_organizacion_by_rescatista WHERE rescatista_id = ?");
     }
 
     public async Task<List<Rescatista>> ObtenerTodosAsync()
@@ -68,6 +72,8 @@ public class RescatistaService : IRescatistaService
             rescatista.Activo,
             rescatista.Oculto));
 
+        // Alta: primera organización del rescatista.
+        await RegistrarEventoOrgAsync(rescatista.Id, "Alta", null, null, organizacion.Id, organizacion.Nombre);
         return rescatista;
     }
 
@@ -90,7 +96,34 @@ public class RescatistaService : IRescatistaService
             dto.ZonaOperacion,
             id));
 
+        // Si cambió de organización, queda asentado de cuál venía y a cuál pasó.
+        if (actual.OrganizacionId != organizacion.Id)
+        {
+            await RegistrarEventoOrgAsync(id, "Cambio", actual.OrganizacionId, actual.Organizacion, organizacion.Id, organizacion.Nombre);
+        }
+
         return true;
+    }
+
+    private async Task RegistrarEventoOrgAsync(Guid rescatistaId, string tipo, Guid? orgAntId, string? orgAntNombre, Guid? orgNuevaId, string orgNuevaNombre)
+    {
+        await _session.ExecuteAsync(_insertEventoOrgStatement.Bind(
+            rescatistaId, DateTime.UtcNow, tipo, orgAntId, orgAntNombre, orgNuevaId, orgNuevaNombre));
+    }
+
+    public async Task<List<EventoOrganizacion>> ObtenerEventosOrganizacionAsync(Guid rescatistaId)
+    {
+        var rows = await _session.ExecuteAsync(_selectEventosOrgStatement.Bind(rescatistaId));
+        return rows.Select(row => new EventoOrganizacion
+        {
+            RescatistaId = row.GetValue<Guid>("rescatista_id"),
+            Fecha = row.GetValue<DateTime>("fecha"),
+            Tipo = row.GetValue<string>("tipo"),
+            OrganizacionAnteriorId = row.IsNull("org_anterior_id") ? null : row.GetValue<Guid>("org_anterior_id"),
+            OrganizacionAnterior = row.IsNull("org_anterior_nombre") ? null : row.GetValue<string>("org_anterior_nombre"),
+            OrganizacionNuevaId = row.IsNull("org_nueva_id") ? null : row.GetValue<Guid>("org_nueva_id"),
+            OrganizacionNueva = row.IsNull("org_nueva_nombre") ? string.Empty : row.GetValue<string>("org_nueva_nombre")
+        }).ToList();
     }
 
     public async Task<bool> EliminarAsync(Guid id)

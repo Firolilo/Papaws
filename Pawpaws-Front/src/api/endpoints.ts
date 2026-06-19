@@ -21,6 +21,8 @@ import type {
   CrearVeterinarioDto,
   EstablecerStockDto,
   EventoAdopcion,
+  EventoCustodia,
+  EventoOrganizacion,
   LoginDto,
   Producto,
   ProductoUsadoDto,
@@ -42,6 +44,8 @@ export const rescatistasApi = {
     apiPost<Rescatista>("animales", "/api/rescatistas", dto),
   update: (id: string, dto: ActualizarRescatistaDto) =>
     apiPut<void>("animales", `/api/rescatistas/${id}`, dto),
+  historialOrganizaciones: (id: string) =>
+    apiGet<EventoOrganizacion[]>("animales", `/api/rescatistas/${id}/organizaciones`),
   // reasignarA: rescatista al que se mueven los animales. Si se omite, el backend usa "Refugio".
   remove: (id: string, reasignarA?: string) =>
     apiDelete(
@@ -75,6 +79,8 @@ export const animalesApi = {
     apiPut<void>("animales", `/api/animales/${id}/estado`, dto),
   adopciones: (id: string) =>
     apiGet<EventoAdopcion[]>("animales", `/api/animales/${id}/adopciones`),
+  custodia: (id: string) =>
+    apiGet<EventoCustodia[]>("animales", `/api/animales/${id}/custodia`),
   remove: (id: string) => apiDelete("animales", `/api/animales/${id}`),
 };
 
@@ -180,6 +186,7 @@ export const reportesApi = {
   c17_animalesPorNombre:      (nombre: string)    => reportesGet<unknown>(`/api/reportes/animales/nombre/${encodeURIComponent(nombre)}?tamano=100`),
   c19_rescatistasPorZona:     (zona: string)      => reportesGet<unknown>(`/api/reportes/rescatistas/zona/${encodeURIComponent(zona)}?tamano=100`),
   c20_organizacionDetalle:    (id: string)        => reportesGet<unknown>(`/api/reportes/organizaciones/${id}/detalle`),
+  c21_rescatistasPorTipoOrg:  (tipo: string)      => reportesGet<unknown>(`/api/reportes/organizaciones/tipo/${encodeURIComponent(tipo)}?tamano=100`),
 };
 
 // ── Seed (solo desarrollo) ─────────────────────────────────────────────────

@@ -386,6 +386,29 @@ public class ReporteService : IReporteService
         };
     }
 
+    public async Task<List<RescatistaPorTipoOrgDto>> C21_RescatistasPorTipoOrganizacionAsync(string tipo)
+    {
+        var orgsDelTipo = (await _animales.GetOrganizacionesAsync())
+            .Where(o => o.Tipo.Equals(tipo, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(o => o.Id, o => o.Nombre);
+
+        var rescatistas = await _animales.GetRescatistasAsync();
+        return rescatistas
+            .Where(r => r.OrganizacionId is Guid oid && orgsDelTipo.ContainsKey(oid))
+            .Select(r => new RescatistaPorTipoOrgDto
+            {
+                Tipo = tipo,
+                Organizacion = orgsDelTipo[r.OrganizacionId!.Value],
+                IdRescatista = r.Id,
+                NombreCompleto = r.NombreCompleto,
+                ZonaOperacion = r.ZonaOperacion,
+                Email = r.CorreoElectronico
+            })
+            .OrderBy(x => x.Organizacion)
+            .ThenBy(x => x.NombreCompleto)
+            .ToList();
+    }
+
     // ── Resolución de nombres a prueba de huérfanos ────────────────────────────
     // Los reportes muestran nombres, no IDs crudos. Si una consulta referencia un veterinario
     // dado de baja, se resuelve su nombre (el endpoint por-id devuelve inactivos) y se marca

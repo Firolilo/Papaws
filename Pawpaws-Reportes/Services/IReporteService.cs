@@ -60,4 +60,7 @@ public interface IReporteService
 
     // C20: Organización → rescatistas → animales
     Task<OrganizacionDetalleDto?> C20_OrganizacionDetalleAsync(Guid organizacionId);
+
+    // C21: Rescatistas por tipo de organización
+    Task<List<RescatistaPorTipoOrgDto>> C21_RescatistasPorTipoOrganizacionAsync(string tipo);
 }

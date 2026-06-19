@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Pawpaws.Reportes.Common;
 using Pawpaws.Reportes.Security;
 using Pawpaws.Reportes.Services;
 
@@ -25,5 +26,16 @@ public class OrganizacionesReportesController : ControllerBase
         if (resultado is null)
             return NotFound(new { mensaje = "Organización no encontrada." });
         return Ok(resultado);
+    }
+
+    /// <summary>C21: Rescatistas (voluntarios) por tipo de organización.</summary>
+    [HttpGet("tipo/{tipo}")]
+    public async Task<IActionResult> C21_RescatistasPorTipoOrganizacion(
+        string tipo,
+        [FromQuery] int pagina = 1,
+        [FromQuery] int tamano = Paginacion.TamanoPorDefecto)
+    {
+        var resultado = await _reporteService.C21_RescatistasPorTipoOrganizacionAsync(tipo);
+        return Ok(resultado.AsReadOnly().Paginar(pagina, tamano));
     }
 }

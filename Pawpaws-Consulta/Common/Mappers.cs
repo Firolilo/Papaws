@@ -39,7 +39,8 @@ public static class Mappers
             Nombre = p.Nombre,
             Tipo = p.Tipo,
             UnidadMedida = p.UnidadMedida,
-            StockDisponible = p.StockDisponible
+            StockDisponible = p.StockDisponible,
+            FechaVencimiento = p.FechaVencimiento
         };
 
     public static List<ConsultaResponseDto> ToResponse(this IEnumerable<Pawpaws.Consulta.Models.Consulta> consultas) =>

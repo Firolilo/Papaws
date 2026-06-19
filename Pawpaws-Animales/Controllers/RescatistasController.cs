@@ -41,6 +41,14 @@ public class RescatistasController : ControllerBase
         return Ok(rescatista.ToResponse());
     }
 
+    [Authorize(Roles = Roles.LecturaAnimales)]
+    [HttpGet("{id:guid}/organizaciones")]
+    public async Task<IActionResult> ObtenerHistorialOrganizaciones(Guid id)
+    {
+        var eventos = await _rescatistaService.ObtenerEventosOrganizacionAsync(id);
+        return Ok(eventos.ToResponse());
+    }
+
     [Authorize(Roles = Roles.GestionAnimales)]
     [HttpPost]
     public async Task<IActionResult> Crear(CrearRescatistaDto dto)

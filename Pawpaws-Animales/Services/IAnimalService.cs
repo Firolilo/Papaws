@@ -21,4 +21,7 @@ public interface IAnimalService
 
     // Historial inmutable de adopciones y devoluciones del animal.
     Task<List<EventoAdopcion>> ObtenerEventosAdopcionAsync(Guid animalId);
+
+    // Historial de custodia del animal (ingreso + reasignaciones entre rescatistas).
+    Task<List<EventoCustodia>> ObtenerEventosCustodiaAsync(Guid animalId);
 }

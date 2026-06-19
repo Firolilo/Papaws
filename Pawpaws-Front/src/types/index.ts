@@ -47,6 +47,20 @@ export interface EventoAdopcion {
   nota?: string | null;
 }
 
+export interface EventoOrganizacion {
+  fecha: string;
+  tipo: "Alta" | "Cambio" | string;
+  organizacionAnterior?: string | null;
+  organizacionNueva: string;
+}
+
+export interface EventoCustodia {
+  fecha: string;
+  tipo: "Ingreso" | "Reasignacion" | string;
+  rescatistaAnterior?: string | null;
+  rescatistaNuevo: string;
+}
+
 export interface Animal {
   id: string;
   nombre: string;
@@ -107,6 +121,7 @@ export interface Producto {
   tipo: string;
   unidadMedida: string;
   stockDisponible: number;
+  fechaVencimiento?: string | null;
 }
 
 export interface CrearProductoDto {
@@ -114,6 +129,7 @@ export interface CrearProductoDto {
   tipo: string;
   unidadMedida: string;
   stockDisponible: number;
+  fechaVencimiento?: string | null;
 }
 
 export type EstadoConsulta =
@@ -194,6 +210,7 @@ export interface ActualizarProductoDto {
   nombre: string;
   tipo: string;
   unidadMedida: string;
+  fechaVencimiento?: string | null;
 }
 
 export interface EstablecerStockDto {

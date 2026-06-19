@@ -22,10 +22,10 @@ public class ProductoService : IProductoService
     public ProductoService(Cassandra.ISession session)
     {
         _session = session;
-        _insertStatement = _session.Prepare("INSERT INTO productos_by_id (id, nombre, tipo, unidad_medida, stock_disponible, activo) VALUES (?, ?, ?, ?, ?, ?)");
-        _selectAllStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, activo FROM productos_by_id");
-        _selectByIdStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, activo FROM productos_by_id WHERE id = ?");
-        _updateStatement = _session.Prepare("UPDATE productos_by_id SET nombre = ?, tipo = ?, unidad_medida = ? WHERE id = ?");
+        _insertStatement = _session.Prepare("INSERT INTO productos_by_id (id, nombre, tipo, unidad_medida, stock_disponible, fecha_vencimiento, activo) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        _selectAllStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, fecha_vencimiento, activo FROM productos_by_id");
+        _selectByIdStatement = _session.Prepare("SELECT id, nombre, tipo, unidad_medida, stock_disponible, fecha_vencimiento, activo FROM productos_by_id WHERE id = ?");
+        _updateStatement = _session.Prepare("UPDATE productos_by_id SET nombre = ?, tipo = ?, unidad_medida = ?, fecha_vencimiento = ? WHERE id = ?");
         _updateStockStatement = _session.Prepare("UPDATE productos_by_id SET stock_disponible = ? WHERE id = ?");
         // Ajuste condicional: solo aplica si el stock no cambió desde la lectura (anti lost-update).
         _compareAndSetStockStatement = _session.Prepare("UPDATE productos_by_id SET stock_disponible = ? WHERE id = ? IF stock_disponible = ?");
@@ -58,10 +58,11 @@ public class ProductoService : IProductoService
             Tipo = dto.Tipo,
             UnidadMedida = dto.UnidadMedida,
             StockDisponible = dto.StockDisponible,
+            FechaVencimiento = dto.FechaVencimiento,
             Activo = true
         };
 
-        await _session.ExecuteAsync(_insertStatement.Bind(producto.Id, producto.Nombre, producto.Tipo, producto.UnidadMedida, producto.StockDisponible, producto.Activo));
+        await _session.ExecuteAsync(_insertStatement.Bind(producto.Id, producto.Nombre, producto.Tipo, producto.UnidadMedida, producto.StockDisponible, producto.FechaVencimiento, producto.Activo));
         return producto;
     }
 
@@ -90,7 +91,7 @@ public class ProductoService : IProductoService
         await GarantizarNombreUnicoAsync(dto.Nombre, id);
 
         // Solo datos descriptivos: el stock se gestiona por endpoints dedicados.
-        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Tipo, dto.UnidadMedida, id));
+        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Tipo, dto.UnidadMedida, dto.FechaVencimiento, id));
         return true;
     }
 
@@ -168,6 +169,7 @@ public class ProductoService : IProductoService
             Tipo = row.GetValue<string>("tipo"),
             UnidadMedida = row.GetValue<string>("unidad_medida"),
             StockDisponible = row.GetValue<int>("stock_disponible"),
+            FechaVencimiento = row.IsNull("fecha_vencimiento") ? null : row.GetValue<DateTime>("fecha_vencimiento"),
             Activo = row.IsNull("activo") || row.GetValue<bool>("activo")
         };
     }

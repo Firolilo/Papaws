@@ -18,6 +18,8 @@ public class AnimalService : IAnimalService
     private readonly PreparedStatement _selectByRescatistaStatement;
     private readonly PreparedStatement _insertEventoAdopcionStatement;
     private readonly PreparedStatement _selectEventosAdopcionStatement;
+    private readonly PreparedStatement _insertEventoCustodiaStatement;
+    private readonly PreparedStatement _selectEventosCustodiaStatement;
 
     public AnimalService(Cassandra.ISession session, IRescatistaService rescatistaService, IConsultaReferenceService consultaReferenceService)
     {
@@ -33,6 +35,8 @@ public class AnimalService : IAnimalService
         _selectByRescatistaStatement = _session.Prepare("SELECT id, nombre, especie, peso_actual, fecha_ingreso, rescatista_id, estado, fecha_salida, adoptante_rescatista_id FROM animales_by_rescatista WHERE rescatista_id = ?");
         _insertEventoAdopcionStatement = _session.Prepare("INSERT INTO eventos_adopcion_by_animal (animal_id, fecha, tipo, rescatista_id, nota) VALUES (?, ?, ?, ?, ?)");
         _selectEventosAdopcionStatement = _session.Prepare("SELECT animal_id, fecha, tipo, rescatista_id, nota FROM eventos_adopcion_by_animal WHERE animal_id = ?");
+        _insertEventoCustodiaStatement = _session.Prepare("INSERT INTO eventos_custodia_by_animal (animal_id, fecha, tipo, resc_anterior_id, resc_anterior_nombre, resc_nuevo_id, resc_nuevo_nombre) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        _selectEventosCustodiaStatement = _session.Prepare("SELECT animal_id, fecha, tipo, resc_anterior_id, resc_anterior_nombre, resc_nuevo_id, resc_nuevo_nombre FROM eventos_custodia_by_animal WHERE animal_id = ?");
     }
 
     public async Task<List<Animal>> ObtenerTodosAsync()
@@ -72,6 +76,8 @@ public class AnimalService : IAnimalService
         };
 
         await GuardarAnimalAsync(animal);
+        // Ingreso: el rescatista que lo trajo al centro.
+        await RegistrarEventoCustodiaAsync(animal.Id, "Ingreso", null, null, dto.RescatistaId, rescatista.NombreCompleto);
         return animal;
     }
 
@@ -104,6 +110,13 @@ public class AnimalService : IAnimalService
         }
         AgregarUpsert(batch, actual);
         await _session.ExecuteAsync(batch);
+
+        // Reasignación: queda asentado de qué rescatista venía y a cuál pasó.
+        if (rescatistaAnterior != dto.RescatistaId)
+        {
+            var anterior = await _rescatistaService.ObtenerPorIdAsync(rescatistaAnterior);
+            await RegistrarEventoCustodiaAsync(id, "Reasignacion", rescatistaAnterior, anterior?.NombreCompleto, dto.RescatistaId, rescatista.NombreCompleto);
+        }
         return true;
     }
 
@@ -135,6 +148,9 @@ public class AnimalService : IAnimalService
             return 0;
         }
 
+        var origen = await _rescatistaService.ObtenerPorIdAsync(origenRescatistaId);
+        var destino = await _rescatistaService.ObtenerPorIdAsync(destinoRescatistaId);
+
         var animales = await ObtenerPorRescatistaAsync(origenRescatistaId);
         foreach (var animal in animales)
         {
@@ -145,9 +161,32 @@ public class AnimalService : IAnimalService
             animal.RescatistaId = destinoRescatistaId;
             AgregarUpsert(batch, animal);
             await _session.ExecuteAsync(batch);
+
+            await RegistrarEventoCustodiaAsync(animal.Id, "Reasignacion", origenRescatistaId, origen?.NombreCompleto, destinoRescatistaId, destino?.NombreCompleto ?? string.Empty);
         }
 
         return animales.Count;
+    }
+
+    private async Task RegistrarEventoCustodiaAsync(Guid animalId, string tipo, Guid? rescAntId, string? rescAntNombre, Guid rescNuevoId, string rescNuevoNombre)
+    {
+        await _session.ExecuteAsync(_insertEventoCustodiaStatement.Bind(
+            animalId, DateTime.UtcNow, tipo, rescAntId, rescAntNombre, rescNuevoId, rescNuevoNombre));
+    }
+
+    public async Task<List<EventoCustodia>> ObtenerEventosCustodiaAsync(Guid animalId)
+    {
+        var rows = await _session.ExecuteAsync(_selectEventosCustodiaStatement.Bind(animalId));
+        return rows.Select(row => new EventoCustodia
+        {
+            AnimalId = row.GetValue<Guid>("animal_id"),
+            Fecha = row.GetValue<DateTime>("fecha"),
+            Tipo = row.GetValue<string>("tipo"),
+            RescatistaAnteriorId = row.IsNull("resc_anterior_id") ? null : row.GetValue<Guid>("resc_anterior_id"),
+            RescatistaAnterior = row.IsNull("resc_anterior_nombre") ? null : row.GetValue<string>("resc_anterior_nombre"),
+            RescatistaNuevoId = row.GetValue<Guid>("resc_nuevo_id"),
+            RescatistaNuevo = row.IsNull("resc_nuevo_nombre") ? string.Empty : row.GetValue<string>("resc_nuevo_nombre")
+        }).ToList();
     }
 
     private static readonly string[] EstadosValidos = { "Disponible", "EnTratamiento", "Adoptado", "Devuelto" };

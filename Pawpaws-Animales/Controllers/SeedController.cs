@@ -24,29 +24,47 @@ public class SeedController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Sembrar()
     {
-        // ── Organizaciones (idempotente por nombre) ────────────────────────────
+        // ── Organizaciones (idempotente por nombre, repartidas por tipo) ────────
         var organizacionesData = new (string Nombre, string Tipo)[]
         {
-            ("Refugio Norte", "Refugio"), ("Patitas Sur", "ONG"), ("Refugio Este", "Refugio"),
-            ("Hogar Animal", "ONG"), ("Centro Canino", "ONG"), ("Patas al Sur", "ONG"),
-            ("Animal Rescue BA", "ONG"), ("Fundación Vida Animal", "ONG"),
+            ("Refugio Norte",          "Refugio"),
+            ("Patitas Sur",            "ONG"),
+            ("Refugio Este",           "Refugio"),
+            ("Hogar Animal",           "Independiente"),
+            ("Centro Canino",          "Autoridad ambiental"),
+            ("Patas al Sur",           "Independiente"),
+            ("Animal Rescue BA",       "ONG"),
+            ("Fundación Vida Animal",  "Autoridad ambiental"),
         };
 
-        var orgIdPorNombre = (await _organizacionService.ObtenerTodosAsync())
+        // Si la organización ya existe, se corrige su tipo al canónico (re-sembrar repara datos viejos).
+        var orgsExistentes = (await _organizacionService.ObtenerTodosAsync())
             .GroupBy(o => o.Nombre, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+        var orgIdPorNombre = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var (nombre, tipo) in organizacionesData)
         {
-            if (orgIdPorNombre.ContainsKey(nombre)) continue;
-            var o = await _organizacionService.CrearAsync(new CrearOrganizacionDto { Nombre = nombre, Tipo = tipo });
-            orgIdPorNombre[nombre] = o.Id;
+            if (orgsExistentes.TryGetValue(nombre, out var existente))
+            {
+                if (!existente.Tipo.Equals(tipo, StringComparison.OrdinalIgnoreCase))
+                {
+                    await _organizacionService.ActualizarAsync(existente.Id,
+                        new ActualizarOrganizacionDto { Nombre = nombre, Tipo = tipo });
+                }
+                orgIdPorNombre[nombre] = existente.Id;
+            }
+            else
+            {
+                var o = await _organizacionService.CrearAsync(new CrearOrganizacionDto { Nombre = nombre, Tipo = tipo });
+                orgIdPorNombre[nombre] = o.Id;
+            }
         }
 
         // ── Rescatistas (idempotente por correo, vinculados a su organización) ──
         var rescatistasExistentes = (await _rescatistaService.ObtenerTodosAsync())
             .GroupBy(r => r.CorreoElectronico, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var rescatistasData = new (string Nombre, string Tel, string Correo, string Org, string Zona)[]
         {
@@ -63,9 +81,22 @@ public class SeedController : ControllerBase
         var rIds = new List<Guid>();
         foreach (var (nombre, tel, correo, org, zona) in rescatistasData)
         {
-            if (rescatistasExistentes.TryGetValue(correo, out var existenteId))
+            var orgId = orgIdPorNombre[org];
+            if (rescatistasExistentes.TryGetValue(correo, out var existente))
             {
-                rIds.Add(existenteId);
+                // Re-vincula a su organización si no la tenía (o la tenía distinta).
+                if (existente.OrganizacionId != orgId)
+                {
+                    await _rescatistaService.ActualizarAsync(existente.Id, new ActualizarRescatistaDto
+                    {
+                        NombreCompleto = existente.NombreCompleto,
+                        TelefonoContacto = existente.TelefonoContacto,
+                        CorreoElectronico = existente.CorreoElectronico,
+                        OrganizacionId = orgId,
+                        ZonaOperacion = existente.ZonaOperacion,
+                    });
+                }
+                rIds.Add(existente.Id);
                 continue;
             }
             var r = await _rescatistaService.CrearAsync(new CrearRescatistaDto
@@ -73,7 +104,7 @@ public class SeedController : ControllerBase
                 NombreCompleto = nombre,
                 TelefonoContacto = tel,
                 CorreoElectronico = correo,
-                OrganizacionId = orgIdPorNombre[org],
+                OrganizacionId = orgId,
                 ZonaOperacion = zona,
             });
             rIds.Add(r.Id);

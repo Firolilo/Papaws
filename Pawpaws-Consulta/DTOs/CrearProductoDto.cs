@@ -18,4 +18,7 @@ public class CrearProductoDto
 
     [Range(0, 1000000, ErrorMessage = "El stock debe estar entre 0 y 1.000.000.")]
     public int StockDisponible { get; set; }
+
+    // Opcional: vacío = el producto no vence (material, instrumental, etc.).
+    public DateTime? FechaVencimiento { get; set; }
 }

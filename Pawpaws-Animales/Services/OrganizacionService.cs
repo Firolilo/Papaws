@@ -7,6 +7,9 @@ namespace Pawpaws.Animales.Services;
 
 public class OrganizacionService : IOrganizacionService
 {
+    // Tipos permitidos de organización (catálogo cerrado).
+    public static readonly string[] TiposValidos = { "ONG", "Autoridad ambiental", "Refugio", "Independiente" };
+
     private readonly Cassandra.ISession _session;
     private readonly PreparedStatement _insertStatement;
     private readonly PreparedStatement _selectAllStatement;
@@ -41,13 +44,14 @@ public class OrganizacionService : IOrganizacionService
 
     public async Task<Organizacion> CrearAsync(CrearOrganizacionDto dto)
     {
+        var tipo = NormalizarTipo(dto.Tipo);
         await GarantizarNombreUnicoAsync(dto.Nombre, null);
 
         var organizacion = new Organizacion
         {
             Id = Guid.NewGuid(),
             Nombre = dto.Nombre,
-            Tipo = dto.Tipo,
+            Tipo = tipo,
             Activo = true
         };
 
@@ -63,9 +67,21 @@ public class OrganizacionService : IOrganizacionService
             return false;
         }
 
+        var tipo = NormalizarTipo(dto.Tipo);
         await GarantizarNombreUnicoAsync(dto.Nombre, id);
-        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Tipo, id));
+        await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, tipo, id));
         return true;
+    }
+
+    // Valida que el tipo sea uno de los permitidos y devuelve su forma canónica.
+    private static string NormalizarTipo(string tipo)
+    {
+        var canonico = TiposValidos.FirstOrDefault(t => t.Equals(tipo?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (canonico is null)
+        {
+            throw new InvalidOperationException($"Tipo de organización inválido. Debe ser uno de: {string.Join(", ", TiposValidos)}.");
+        }
+        return canonico;
     }
 
     public async Task<bool> EliminarAsync(Guid id)

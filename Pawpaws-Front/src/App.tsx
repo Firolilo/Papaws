@@ -6,7 +6,9 @@ import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Rescatistas } from "./pages/Rescatistas";
+import { RescatistaDetalle } from "./pages/RescatistaDetalle";
 import { Organizaciones } from "./pages/Organizaciones";
+import { OrganizacionDetalle } from "./pages/OrganizacionDetalle";
 import { Animales } from "./pages/Animales";
 import { AnimalDetalle } from "./pages/AnimalDetalle";
 import { Veterinarios } from "./pages/Veterinarios";
@@ -28,7 +30,9 @@ export default function App() {
               <Route index element={<Dashboard />} />
               {/* Lectura de animales/rescatistas: cualquier rol autenticado */}
               <Route path="rescatistas" element={<Rescatistas />} />
+              <Route path="rescatistas/:id" element={<RescatistaDetalle />} />
               <Route path="organizaciones" element={<Organizaciones />} />
+              <Route path="organizaciones/:id" element={<OrganizacionDetalle />} />
               <Route path="animales" element={<Animales />} />
               <Route path="animales/:id" element={<AnimalDetalle />} />
 

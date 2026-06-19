@@ -10,4 +10,7 @@ public interface IRescatistaService
     Task<Rescatista> CrearAsync(CrearRescatistaDto dto);
     Task<bool> ActualizarAsync(Guid id, ActualizarRescatistaDto dto);
     Task<bool> EliminarAsync(Guid id);
+
+    // Historial de cambios de organización del rescatista (alta + cambios).
+    Task<List<EventoOrganizacion>> ObtenerEventosOrganizacionAsync(Guid rescatistaId);
 }

@@ -28,4 +28,16 @@ public static class Mappers
 
     public static List<EventoAdopcionResponseDto> ToResponse(this IEnumerable<EventoAdopcion> eventos) =>
         eventos.Select(ToResponse).ToList();
+
+    public static EventoOrganizacionResponseDto ToResponse(this EventoOrganizacion e) =>
+        new(e.Fecha, e.Tipo, e.OrganizacionAnterior, e.OrganizacionNueva);
+
+    public static List<EventoOrganizacionResponseDto> ToResponse(this IEnumerable<EventoOrganizacion> eventos) =>
+        eventos.Select(ToResponse).ToList();
+
+    public static EventoCustodiaResponseDto ToResponse(this EventoCustodia e) =>
+        new(e.Fecha, e.Tipo, e.RescatistaAnterior, e.RescatistaNuevo);
+
+    public static List<EventoCustodiaResponseDto> ToResponse(this IEnumerable<EventoCustodia> eventos) =>
+        eventos.Select(ToResponse).ToList();
 }

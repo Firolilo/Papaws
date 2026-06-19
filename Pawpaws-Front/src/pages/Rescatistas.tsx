@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, Mail, Phone, MapPin } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
@@ -183,9 +184,12 @@ export function Rescatistas() {
                   {r.nombreCompleto.charAt(0)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-moss-800 truncate">
+                  <Link
+                    to={`/rescatistas/${r.id}`}
+                    className="font-medium text-moss-800 hover:text-moss-600 hover:underline decoration-moss-300 underline-offset-2 truncate block"
+                  >
                     {r.nombreCompleto}
-                  </p>
+                  </Link>
                   <p className="text-xs text-clay-600 font-medium mt-0.5">
                     {r.organizacion}
                   </p>

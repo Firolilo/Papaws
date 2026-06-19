@@ -15,4 +15,7 @@ public class ActualizarProductoDto
     [Required]
     [StringLength(40)]
     public string UnidadMedida { get; set; } = string.Empty;
+
+    // Opcional: vacío = el producto no vence.
+    public DateTime? FechaVencimiento { get; set; }
 }

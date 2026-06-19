@@ -32,16 +32,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
-import {
-  construirDocumentoHtml,
-  escHtml,
-  imprimirDocumento,
-  pdfChip,
-  pdfSeccion,
-  pdfTabla,
-  pdfTablaDatos,
-  type ChipTono,
-} from "../utils/pdf";
+import { descargarPdf, type SeccionPdf } from "../utils/pdf";
 import {
   animalesApi,
   consultasApi,
@@ -87,6 +78,7 @@ export function AnimalDetalle() {
   const animal = useFetch(() => animalesApi.get(id), [id]);
   const rescatistas = useFetch(() => rescatistasApi.list());
   const adopciones = useFetch(() => animalesApi.adopciones(id), [id]);
+  const custodia = useFetch(() => animalesApi.custodia(id), [id]);
 
   // Modal de estado/adopción.
   const [estadoOpen, setEstadoOpen] = useState(false);
@@ -157,6 +149,15 @@ export function AnimalDetalle() {
         (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       ),
     [adopciones.data]
+  );
+
+  // Historial de custodia (ingreso + reasignaciones entre rescatistas).
+  const historialCustodia = useMemo(
+    () =>
+      [...(custodia.data ?? [])].sort(
+        (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      ),
+    [custodia.data]
   );
 
   const vetsById = useMemo(
@@ -276,142 +277,104 @@ export function AnimalDetalle() {
     return [...base, { value: "Adoptado", label: "Adoptado" }];
   }, [animal.data?.estado]);
 
-  // Genera la guía completa del animal y abre el diálogo de impresión (Guardar como PDF).
-  function exportarFicha() {
+  // Genera la guía completa del animal y la descarga como PDF (nombre: "<animal> - historial.pdf").
+  const [exportando, setExportando] = useState(false);
+  async function exportarFicha() {
     const a = animal.data;
     if (!a) return;
 
-    const fila = (label: string, valor: string) =>
-      `<tr><th>${esc(label)}</th><td>${esc(valor)}</td></tr>`;
+    const secciones: SeccionPdf[] = [
+      {
+        titulo: "Datos del paciente",
+        tipo: "datos",
+        datos: [
+          ["Especie", a.especie],
+          ["Peso actual", `${Number(a.pesoActual).toFixed(2)} kg`],
+          ["Fecha de ingreso", formatFecha(a.fechaIngreso)],
+          [
+            "Rescatista de ingreso",
+            rescatista
+              ? rescatista.nombreCompleto + (rescatista.activo ? "" : " (dado de baja)")
+              : "—",
+          ],
+          ["Organización", rescatista?.organizacion ?? ""],
+          ["Estado actual", ESTADO_ANIMAL_LABEL[a.estado] ?? a.estado],
+        ],
+      },
+      {
+        titulo: "Adopciones y devoluciones",
+        tipo: "tabla",
+        headers: ["Evento", "Fecha", "Detalle"],
+        vacio: "Sin movimientos de adopción.",
+        filas: historialAdopciones.map((ev) => [
+          ev.tipo === "Devuelto" ? "Devuelto" : "Adoptado",
+          formatFecha(ev.fecha),
+          ev.tipo === "Adoptado"
+            ? "Entregado por " + nombreRescatista(ev.rescatistaId)
+            : ev.nota ?? "Devuelto al refugio",
+        ]),
+      },
+      {
+        titulo: "Evolución de peso",
+        tipo: "texto",
+        texto: evolucionPeso.length
+          ? evolucionPeso.map((p) => `${p.fecha}: ${p.peso} kg`).join("      ·      ")
+          : "Sin mediciones de peso registradas.",
+      },
+      {
+        titulo: `Historia clínica (${historia.length})`,
+        tipo: "tabla",
+        headers: ["Fecha", "Veterinario", "Diagnóstico / tratamiento", "Signos"],
+        vacio: "Sin consultas registradas.",
+        filas: historia.map((c) => {
+          const vet = vetsById[c.veterinarioId];
+          const clinico = [
+            c.diagnostico ? `Dx: ${c.diagnostico}` : "",
+            c.tratamiento ? `Tx: ${c.tratamiento}` : "",
+            c.indicacionesSeguimiento ? `Seguimiento: ${c.indicacionesSeguimiento}` : "",
+            !c.diagnostico && c.observaciones ? c.observaciones : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+          const signos = [
+            c.peso != null ? `Peso: ${c.peso} kg` : "",
+            c.temperatura != null ? `Temp: ${c.temperatura} °C` : "",
+            c.condicionCorporal ? `Cond.: ${c.condicionCorporal}` : "",
+            c.ameritaTratamiento != null
+              ? c.ameritaTratamiento
+                ? "Amerita tratamiento"
+                : "No amerita tratamiento"
+              : "",
+            c.proximoControl ? `Próx. control: ${formatFecha(c.proximoControl)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+          return [
+            `${formatFecha(c.fechaHora)}\n${c.estado}`,
+            vet?.nombreCompleto ?? "Veterinario",
+            clinico || "—",
+            signos || "—",
+          ];
+        }),
+      },
+    ];
 
-    const adopcionesHtml = historialAdopciones.length
-      ? `<table class="ev">${historialAdopciones
-          .map(
-            (ev) =>
-              `<tr><td class="tag ${ev.tipo === "Devuelto" ? "dev" : "ado"}">${
-                ev.tipo === "Devuelto" ? "Devuelto" : "Adoptado"
-              }</td><td>${esc(formatFecha(ev.fecha))}</td><td>${
-                ev.tipo === "Adoptado"
-                  ? esc("por " + nombreRescatista(ev.rescatistaId))
-                  : esc(ev.nota ?? "devuelto al refugio")
-              }</td></tr>`
-          )
-          .join("")}</table>`
-      : `<p class="muted">Sin movimientos de adopción.</p>`;
-
-    const pesoHtml = evolucionPeso.length
-      ? `<p>${evolucionPeso
-          .map((p) => `${esc(p.fecha)}: <b>${esc(p.peso)} kg</b>`)
-          .join(" &nbsp;·&nbsp; ")}</p>`
-      : `<p class="muted">Sin mediciones de peso registradas.</p>`;
-
-    const consultasHtml = historia.length
-      ? historia
-          .map((c) => {
-            const vet = vetsById[c.veterinarioId];
-            const signos = [
-              c.peso != null ? `Peso: ${esc(c.peso)} kg` : "",
-              c.temperatura != null ? `Temp: ${esc(c.temperatura)} °C` : "",
-              c.condicionCorporal ? `Condición: ${esc(c.condicionCorporal)}` : "",
-              c.ameritaTratamiento != null
-                ? c.ameritaTratamiento
-                  ? "Amerita tratamiento"
-                  : "No amerita tratamiento"
-                : "",
-              c.proximoControl
-                ? `Próximo control: ${esc(formatFecha(c.proximoControl))}`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return `<div class="cons">
-                <div class="cons-h"><b>${esc(formatFecha(c.fechaHora))}</b> · ${esc(
-              c.estado
-            )} · Dr/a. ${esc(vet?.nombreCompleto ?? "Veterinario")} <span class="cod">${esc(
-              c.codigo
-            )}</span></div>
-                ${c.diagnostico ? `<p><b>Diagnóstico:</b> ${esc(c.diagnostico)}</p>` : ""}
-                ${c.tratamiento ? `<p><b>Tratamiento:</b> ${esc(c.tratamiento)}</p>` : ""}
-                ${
-                  c.indicacionesSeguimiento
-                    ? `<p><b>Seguimiento:</b> ${esc(c.indicacionesSeguimiento)}</p>`
-                    : ""
-                }
-                ${!c.diagnostico && c.observaciones ? `<p>${esc(c.observaciones)}</p>` : ""}
-                ${signos ? `<p class="muted">${signos}</p>` : ""}
-              </div>`;
-          })
-          .join("")
-      : `<p class="muted">Sin consultas registradas.</p>`;
-
-    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
-<title>Ficha - ${esc(a.nombre)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #2b2f33; margin: 32px; }
-  .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0a9396; padding-bottom:10px; }
-  .top .brand { font-size:22px; font-weight:800; color:#005f73; }
-  .top .sub { color:#5a6068; font-size:12px; }
-  h1 { font-size:30px; margin:18px 0 2px; color:#005f73; }
-  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:#bb3e03; margin:22px 0 8px; border-bottom:1px solid #e7e0d3; padding-bottom:4px; }
-  .lead { color:#5a6068; margin:0 0 6px; }
-  table.kv { border-collapse:collapse; width:100%; }
-  table.kv th { text-align:left; width:200px; color:#5a6068; font-weight:600; padding:4px 8px 4px 0; vertical-align:top; }
-  table.kv td { padding:4px 0; }
-  table.ev { border-collapse:collapse; width:100%; font-size:13px; }
-  table.ev td { padding:5px 8px; border-bottom:1px solid #eee; vertical-align:top; }
-  .tag { font-weight:700; width:90px; }
-  .tag.ado { color:#0a9396; } .tag.dev { color:#bb3e03; }
-  .cons { border:1px solid #e7e0d3; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
-  .cons-h { color:#005f73; margin-bottom:4px; }
-  .cons p { margin:3px 0; font-size:13px; }
-  .cod { float:right; color:#9aa0a6; font-family:monospace; font-size:11px; }
-  .muted { color:#9aa0a6; font-size:12px; }
-  footer { margin-top:26px; border-top:1px solid #e7e0d3; padding-top:8px; color:#9aa0a6; font-size:11px; }
-  @media print { body { margin:14mm; } }
-</style></head><body>
-  <div class="top">
-    <div><div class="brand">🐾 Papaws</div><div class="sub">Refugio &amp; cuidado animal</div></div>
-    <div class="sub">Guía clínica del animal<br>Generada el ${esc(
-      new Date().toLocaleDateString("es", { day: "2-digit", month: "long", year: "numeric" })
-    )}</div>
-  </div>
-
-  <h1>${esc(a.nombre)}</h1>
-  <p class="lead">${esc(a.especie)} · Estado actual: <b>${esc(
-      ESTADO_ANIMAL_LABEL[a.estado] ?? a.estado
-    )}</b></p>
-
-  <h2>Datos del animal</h2>
-  <table class="kv">
-    ${fila("Especie", a.especie)}
-    ${fila("Peso actual", `${Number(a.pesoActual).toFixed(2)} kg`)}
-    ${fila("Fecha de ingreso", formatFecha(a.fechaIngreso))}
-    ${fila("Rescatista de ingreso", rescatista ? rescatista.nombreCompleto + (rescatista.activo ? "" : " (dado de baja)") : "—")}
-    ${rescatista?.organizacion ? fila("Organización", rescatista.organizacion) : ""}
-  </table>
-
-  <h2>Adopciones y devoluciones</h2>
-  ${adopcionesHtml}
-
-  <h2>Evolución de peso</h2>
-  ${pesoHtml}
-
-  <h2>Historia clínica (${historia.length})</h2>
-  ${consultasHtml}
-
-  <footer>Documento informativo generado por el sistema Papaws. Refleja el historial del animal desde su ingreso al refugio.</footer>
-</body></html>`;
-
-    const w = window.open("", "_blank", "width=900,height=1000");
-    if (!w) {
-      toast.error("Permití las ventanas emergentes para exportar la ficha.");
-      return;
+    setExportando(true);
+    try {
+      await descargarPdf({
+        tituloDoc: "Guía clínica del animal",
+        titulo: a.nombre,
+        subtitulo: `${a.especie} · ingresó el ${formatFecha(a.fechaIngreso)}`,
+        etiqueta: ESTADO_ANIMAL_LABEL[a.estado] ?? a.estado,
+        secciones,
+        nombreArchivo: `${a.nombre} - historial`,
+        pie: "Historial del animal desde su ingreso al refugio.",
+      });
+    } catch {
+      toast.error("No se pudo generar el PDF.");
+    } finally {
+      setExportando(false);
     }
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 350);
   }
 
   if (animal.loading) return <Spinner />;
@@ -444,8 +407,9 @@ export function AnimalDetalle() {
               size="sm"
               icon={<FileDown size={15} />}
               onClick={exportarFicha}
+              disabled={exportando}
             >
-              Exportar PDF
+              {exportando ? "Generando…" : "Descargar PDF"}
             </Button>
             {puedeGestionarAnimales && (
               <Button
@@ -574,6 +538,42 @@ export function AnimalDetalle() {
                       {ev.nota}
                     </p>
                   )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Card>
+      )}
+
+      {/* Historial de custodia */}
+      {historialCustodia.length > 0 && (
+        <Card className="p-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <HeartHandshake size={16} className="text-moss-700" />
+            <h2 className="font-display text-lg text-moss-800">
+              Historial de custodia
+            </h2>
+          </div>
+          <ol className="space-y-2.5">
+            {historialCustodia.map((ev, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <Badge tone={ev.tipo === "Reasignacion" ? "sun" : "moss"}>
+                  {ev.tipo === "Reasignacion" ? "Reasignado" : "Ingreso"}
+                </Badge>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13.5px] text-ink-700">
+                    {formatFecha(ev.fecha)} ·{" "}
+                    {ev.tipo === "Reasignacion" && ev.rescatistaAnterior ? (
+                      <>
+                        de <strong>{ev.rescatistaAnterior}</strong> a{" "}
+                        <strong>{ev.rescatistaNuevo}</strong>
+                      </>
+                    ) : (
+                      <>
+                        ingresado por <strong>{ev.rescatistaNuevo}</strong>
+                      </>
+                    )}
+                  </p>
                 </div>
               </li>
             ))}

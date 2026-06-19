@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS {keyspace}.productos_by_id (
     tipo text,
     unidad_medida text,
     stock_disponible int,
+    fecha_vencimiento timestamp,
     activo boolean
 )"));
 
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS {keyspace}.productos_by_id (
         await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.veterinarios_by_id ADD IF NOT EXISTS activo boolean"));
         await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.servicios_by_id ADD IF NOT EXISTS activo boolean"));
         await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.productos_by_id ADD IF NOT EXISTS activo boolean"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.productos_by_id ADD IF NOT EXISTS fecha_vencimiento timestamp"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
 CREATE TABLE IF NOT EXISTS {keyspace}.consultas_by_codigo (
