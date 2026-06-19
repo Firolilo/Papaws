@@ -9,3 +9,14 @@ export const ESPECIES_ACEPTADAS = [
   "Tortuga",
   "Hámster",
 ] as const;
+
+// Especialidades veterinarias disponibles. Lista fija (sin CRUD): dropdown al registrar un
+// veterinario y filtro en los reportes.
+export const ESPECIALIDADES_VETERINARIAS = [
+  "Medicina General",
+  "Cirugía",
+  "Dermatología",
+  "Odontología",
+  "Exóticos",
+  "Nutrición",
+] as const;

@@ -153,9 +153,15 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("Una consulta nueva solo puede crearse como Pendiente o Confirmada. Para completarla, registrá el diagnóstico una vez atendida.");
         }
 
-        if (!await _animalReferenceService.ExisteAnimalAsync(dto.AnimalId))
+        var estadoAnimal = await _animalReferenceService.ObtenerEstadoAsync(dto.AnimalId);
+        if (estadoAnimal is null)
         {
             throw new InvalidOperationException("El animal asociado no existe.");
+        }
+        // No se agendan consultas para animales adoptados: primero deben ser devueltos al refugio.
+        if (estadoAnimal.Equals("Adoptado", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("No se puede agendar una consulta para un animal adoptado. Primero debe registrarse su devolución al refugio.");
         }
 
         if (await _veterinarioService.ObtenerPorIdAsync(dto.VeterinarioId) is null or { Activo: false })

@@ -383,14 +383,16 @@ export function Consultas() {
               label="Animal"
               value={form.animalId}
               onChange={(v) => setForm({ ...form, animalId: v })}
-              options={(animales.data ?? []).map((a) => ({
-                value: a.id,
-                label: a.nombre,
-                hint: a.especie,
-              }))}
+              options={(animales.data ?? [])
+                .filter((a) => a.estado !== "Adoptado")
+                .map((a) => ({
+                  value: a.id,
+                  label: a.nombre,
+                  hint: a.especie,
+                }))}
               placeholder="Selecciona…"
               searchPlaceholder="Buscar animal…"
-              emptyText="No hay animales"
+              emptyText="No hay animales disponibles"
             />
             <Combobox
               label="Veterinario"

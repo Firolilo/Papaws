@@ -4,6 +4,7 @@ import { Plus, Phone, Calendar, Eye } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
+import { Combobox } from "../components/Combobox";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
@@ -11,7 +12,10 @@ import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
 import { useToast } from "../components/Toast";
 import { consultasApi, veterinariosApi } from "../api/endpoints";
+import { ESPECIALIDADES_VETERINARIAS } from "../constants";
 import type { CrearVeterinarioDto, Veterinario } from "../types";
+
+const ESPECIALIDAD_OPTIONS = ESPECIALIDADES_VETERINARIAS.map((e) => ({ value: e, label: e }));
 
 const emptyForm: CrearVeterinarioDto = {
   nombreCompleto: "",
@@ -69,6 +73,10 @@ export function Veterinarios() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.especialidadPrincipal) {
+      setSubmitError("Selecciona una especialidad.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -207,16 +215,13 @@ export function Veterinarios() {
               setForm({ ...form, telefonoContacto: e.target.value })
             }
           />
-          <Input
+          <Combobox
             label="Especialidad principal"
-            placeholder="Cirugía, Dermatología, Medicina general…"
-            required
-            minLength={2}
-            maxLength={120}
             value={form.especialidadPrincipal}
-            onChange={(e) =>
-              setForm({ ...form, especialidadPrincipal: e.target.value })
-            }
+            onChange={(v) => setForm({ ...form, especialidadPrincipal: v })}
+            options={ESPECIALIDAD_OPTIONS}
+            placeholder="Selecciona una especialidad…"
+            searchPlaceholder="Buscar especialidad…"
           />
 
           {submitError && <ErrorBox message={submitError} />}

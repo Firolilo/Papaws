@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
 namespace Pawpaws.Consulta.Services;
@@ -57,6 +58,53 @@ public class AnimalReferenceService : IAnimalReferenceService
             catch (TaskCanceledException) when (intento < MaxIntentos)
             {
                 // Timeout transitorio: reintentar.
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200 * intento));
+        }
+    }
+
+    public async Task<string?> ObtenerEstadoAsync(Guid animalId)
+    {
+        var authorization = _httpContextAccessor.HttpContext?.Request.Headers.Authorization.ToString();
+
+        for (int intento = 1; ; intento++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/animales/{animalId}");
+            if (!string.IsNullOrWhiteSpace(authorization))
+            {
+                request.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            try
+            {
+                using var response = await _httpClient.SendAsync(request);
+
+                // 404: el animal no existe.
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    return doc.RootElement.TryGetProperty("estado", out var estado)
+                        ? estado.GetString() ?? string.Empty
+                        : string.Empty;
+                }
+
+                if (intento >= MaxIntentos)
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+            }
+            catch (HttpRequestException) when (intento < MaxIntentos)
+            {
+            }
+            catch (TaskCanceledException) when (intento < MaxIntentos)
+            {
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(200 * intento));

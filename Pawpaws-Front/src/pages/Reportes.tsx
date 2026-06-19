@@ -16,7 +16,7 @@ import {
   productosApi, serviciosApi, organizacionesApi, reportesApi, seedApi,
 } from "../api/endpoints";
 import type { Animal, Consulta, Rescatista, Veterinario, Servicio, Producto, Organizacion } from "../types";
-import { ESPECIES_ACEPTADAS } from "../constants";
+import { ESPECIES_ACEPTADAS, ESPECIALIDADES_VETERINARIAS } from "../constants";
 import { descargarPdf } from "../utils/pdf";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c20", "c21", "c3", "c17"];
 const ESTADOS = ["Pendiente", "Confirmada", "Completada", "Cancelada"];
 const ESPECIE_OPTIONS:      SelectOption[] = ESPECIES_ACEPTADAS.map(e=>({value:e,label:e}));
 const ZONA_OPTIONS:         SelectOption[] = ["Norte","Sur","Este","Oeste","Centro"].map(z=>({value:z,label:z}));
-const ESPECIALIDAD_OPTIONS: SelectOption[] = ["Medicina General","Cirugía","Dermatología","Odontología","Exóticos","Nutrición"].map(e=>({value:e,label:e}));
+const ESPECIALIDAD_OPTIONS: SelectOption[] = ESPECIALIDADES_VETERINARIAS.map(e=>({value:e,label:e}));
 const TIPO_ORG_OPTIONS:     SelectOption[] = ["ONG","Autoridad ambiental","Refugio","Independiente"].map(t=>({value:t,label:t}));
 
 const AUTO_RUN_TYPES: InputType[] = ["rescatista","animal","veterinario","servicio","producto","estado","especie","especialidad","zona","organizacion","tipoOrganizacion"];
