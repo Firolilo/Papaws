@@ -18,6 +18,7 @@ import { ServicioDetalle } from "./pages/ServicioDetalle";
 import { Productos } from "./pages/Productos";
 import { Consultas } from "./pages/Consultas";
 import { ConsultaDetalle } from "./pages/ConsultaDetalle";
+import { Gastos } from "./pages/Gastos";
 import { Reportes } from "./pages/Reportes";
 
 export default function App() {
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="productos" element={<Productos />} />
               <Route path="consultas" element={<Consultas />} />
               <Route path="consultas/:codigo" element={<ConsultaDetalle />} />
+              <Route path="gastos" element={<Gastos />} />
               </Route>
             </Route>
           </Route>

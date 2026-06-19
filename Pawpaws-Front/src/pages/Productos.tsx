@@ -18,7 +18,14 @@ const emptyForm: CrearProductoDto = {
   unidadMedida: "",
   stockDisponible: 0,
   fechaVencimiento: "",
+  costoUnitario: 0,
 };
+
+const fmtMoneda = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
 
 // Estado de vencimiento de un producto (para badges/colores).
 function estadoVencimiento(iso?: string | null): { texto: string; tone: "red" | "sun" | "moss" } | null {
@@ -62,6 +69,7 @@ export function Productos() {
       fechaVencimiento: p.fechaVencimiento
         ? new Date(p.fechaVencimiento).toISOString().slice(0, 10)
         : "",
+      costoUnitario: p.costoUnitario,
     });
     setSubmitError(null);
     setOpen(true);
@@ -88,6 +96,7 @@ export function Productos() {
           tipo: form.tipo,
           unidadMedida: form.unidadMedida,
           fechaVencimiento: vencimiento,
+          costoUnitario: form.costoUnitario,
         });
         toast.success(`Se actualizó “${form.nombre}”.`);
       } else {
@@ -167,6 +176,7 @@ export function Productos() {
                   <th className="text-left font-semibold px-5 py-3">Tipo</th>
                   <th className="text-left font-semibold px-5 py-3">Unidad</th>
                   <th className="text-left font-semibold px-5 py-3">Vencimiento</th>
+                  <th className="text-right font-semibold px-5 py-3">Costo unit.</th>
                   <th className="text-right font-semibold px-5 py-3">Stock</th>
                   <th className="text-left font-semibold px-5 py-3">Estado</th>
                   <th className="px-5 py-3" />
@@ -202,6 +212,9 @@ export function Productos() {
                         ) : (
                           <span className="text-[12px] text-ink-400">No vence</span>
                         )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono text-[12.5px] text-ink-600">
+                        {p.costoUnitario ? fmtMoneda.format(p.costoUnitario) : "—"}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono">
                         {p.stockDisponible}
@@ -317,6 +330,23 @@ export function Productos() {
           />
           <p className="text-[11px] text-ink-500 -mt-2">
             Dejalo vacío si el producto no vence (material, instrumental, etc.).
+          </p>
+
+          <Input
+            label="Costo unitario"
+            hint="por unidad"
+            type="number"
+            min="0"
+            max="10000000"
+            step="1"
+            required
+            value={form.costoUnitario || ""}
+            onChange={(e) =>
+              setForm({ ...form, costoUnitario: parseFloat(e.target.value) || 0 })
+            }
+          />
+          <p className="text-[11px] text-ink-500 -mt-2">
+            Lo que le cuesta al refugio cada unidad. Se usa en el reporte de gastos.
           </p>
 
           {submitError && <ErrorBox message={submitError} />}

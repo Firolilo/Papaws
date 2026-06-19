@@ -12,6 +12,7 @@ import {
   Pill,
   Stethoscope,
   Syringe,
+  Wallet,
   X,
 } from "lucide-react";
 import { Logo } from "./Logo";
@@ -27,6 +28,7 @@ const nav = [
   { to: "/veterinarios", label: "Veterinarios", icon: Stethoscope, soloConsultas: true },
   { to: "/servicios", label: "Servicios", icon: Syringe, soloConsultas: true },
   { to: "/productos", label: "Inventario", icon: Pill, soloConsultas: true },
+  { to: "/gastos", label: "Gastos", icon: Wallet, soloConsultas: true },
   { to: "/reportes", label: "Reportes", icon: BarChart2, soloConsultas: false },
 ];
 

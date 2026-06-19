@@ -21,4 +21,8 @@ public class CrearProductoDto
 
     // Opcional: vacío = el producto no vence (material, instrumental, etc.).
     public DateTime? FechaVencimiento { get; set; }
+
+    // Costo unitario para el refugio (alimenta el reporte de gastos).
+    [Range(0, 10000000, ErrorMessage = "El costo debe estar entre 0 y 10.000.000.")]
+    public decimal CostoUnitario { get; set; }
 }

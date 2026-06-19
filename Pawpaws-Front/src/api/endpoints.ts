@@ -23,6 +23,7 @@ import type {
   EventoAdopcion,
   EventoCustodia,
   EventoOrganizacion,
+  GastoConsulta,
   LoginDto,
   Producto,
   ProductoUsadoDto,
@@ -130,6 +131,7 @@ export const consultasApi = {
     ),
   porServicio: (servicioId: string) =>
     apiGet<Consulta[]>("consulta", `/api/consultas/servicio/${servicioId}`),
+  gastos: () => apiGet<GastoConsulta[]>("consulta", `/api/consultas/gastos`),
   create: (dto: CrearConsultaDto) =>
     apiPost<Consulta>("consulta", "/api/consultas", dto),
   actualizar: (codigo: string, dto: ActualizarConsultaDto) =>

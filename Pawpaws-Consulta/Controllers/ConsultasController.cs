@@ -26,6 +26,13 @@ public class ConsultasController : ControllerBase
         return Ok(consultas.ToResponse().Paginar(pagina, tamano));
     }
 
+    [HttpGet("gastos")]
+    public async Task<IActionResult> ObtenerGastos()
+    {
+        var gastos = await _consultaService.ObtenerGastosAsync();
+        return Ok(gastos);
+    }
+
     [HttpGet("{codigo}")]
     public async Task<IActionResult> ObtenerPorCodigo(string codigo)
     {

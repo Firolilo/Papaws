@@ -124,6 +124,7 @@ export interface Producto {
   unidadMedida: string;
   stockDisponible: number;
   fechaVencimiento?: string | null;
+  costoUnitario: number;
 }
 
 export interface CrearProductoDto {
@@ -132,6 +133,7 @@ export interface CrearProductoDto {
   unidadMedida: string;
   stockDisponible: number;
   fechaVencimiento?: string | null;
+  costoUnitario: number;
 }
 
 export type EstadoConsulta =
@@ -213,6 +215,30 @@ export interface ActualizarProductoDto {
   tipo: string;
   unidadMedida: string;
   fechaVencimiento?: string | null;
+  costoUnitario: number;
+}
+
+// Desglose económico de una consulta (reporte de gastos).
+export interface GastoServicio {
+  nombre: string;
+  costo: number;
+}
+export interface GastoProducto {
+  nombre: string;
+  cantidad: number;
+  costoUnitario: number;
+  subtotal: number;
+}
+export interface GastoConsulta {
+  codigo: string;
+  fechaHora: string;
+  estado: string;
+  animalId: string;
+  costoServicios: number;
+  costoProductos: number;
+  total: number;
+  servicios: GastoServicio[];
+  productos: GastoProducto[];
 }
 
 export interface EstablecerStockDto {

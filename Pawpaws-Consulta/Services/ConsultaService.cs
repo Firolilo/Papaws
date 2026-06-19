@@ -122,6 +122,38 @@ public class ConsultaService : IConsultaService
         return await ObtenerLivianasPorCodigosAsync(codigos.Select(row => row.GetValue<string>("codigo")));
     }
 
+    // Desglose económico de todas las consultas: para cada una calcula el costo en servicios y en
+    // productos consumidos. Toda la información vive en este servicio, así que el cálculo es local.
+    public async Task<List<GastoConsultaResponseDto>> ObtenerGastosAsync()
+    {
+        var consultas = await ObtenerTodosAsync();
+        var servicios = (await _servicioService.ObtenerTodosAsync()).ToDictionary(s => s.Id);
+        var productos = (await _productoService.ObtenerTodosAsync()).ToDictionary(p => p.Id);
+
+        var resultado = new List<GastoConsultaResponseDto>();
+        foreach (var consulta in consultas)
+        {
+            var serviciosIds = await ObtenerServiciosAsync(consulta.Codigo);
+            var serviciosLinea = serviciosIds.Select(id => servicios.TryGetValue(id, out var s)
+                ? new GastoServicioDto(s.Nombre, s.PrecioBase)
+                : new GastoServicioDto("(servicio dado de baja)", 0m)).ToList();
+
+            var productosUsados = await ObtenerProductosUsadosAsync(consulta.Codigo);
+            var productosLinea = productosUsados.Select(pu => productos.TryGetValue(pu.ProductoId, out var p)
+                ? new GastoProductoDto(p.Nombre, pu.CantidadUsada, p.CostoUnitario, p.CostoUnitario * pu.CantidadUsada)
+                : new GastoProductoDto("(producto dado de baja)", pu.CantidadUsada, 0m, 0m)).ToList();
+
+            var costoServicios = serviciosLinea.Sum(s => s.Costo);
+            var costoProductos = productosLinea.Sum(p => p.Subtotal);
+            resultado.Add(new GastoConsultaResponseDto(
+                consulta.Codigo, consulta.FechaHora, consulta.Estado, consulta.AnimalId,
+                costoServicios, costoProductos, costoServicios + costoProductos,
+                serviciosLinea, productosLinea));
+        }
+
+        return resultado.OrderByDescending(r => r.FechaHora).ToList();
+    }
+
     // Listado liviano (sin servicios ni productos) a partir de un conjunto de códigos.
     private async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerLivianasPorCodigosAsync(IEnumerable<string> codigos)
     {

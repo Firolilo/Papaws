@@ -8,4 +8,5 @@ public class ProductoResponseDto
     public string UnidadMedida { get; set; } = string.Empty;
     public int StockDisponible { get; set; }
     public DateTime? FechaVencimiento { get; set; }
+    public decimal CostoUnitario { get; set; }
 }

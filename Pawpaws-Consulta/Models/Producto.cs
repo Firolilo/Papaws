@@ -9,5 +9,8 @@ public class Producto
     public int StockDisponible { get; set; }
     // Opcional: muchos productos (material, instrumental) no vencen.
     public DateTime? FechaVencimiento { get; set; }
+    // Costo unitario del insumo: lo que le cuesta al refugio cada unidad. Alimenta el reporte
+    // de gastos.
+    public decimal CostoUnitario { get; set; }
     public bool Activo { get; set; } = true;
 }

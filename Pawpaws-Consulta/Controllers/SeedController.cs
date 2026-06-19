@@ -106,25 +106,25 @@ public class SeedController : ControllerBase
         }
 
         // ── Productos ─────────────────────────────────────────────────────────
-        var productosData = new (string Nombre, string Tipo, string Unidad, int Stock)[]
+        var productosData = new (string Nombre, string Tipo, string Unidad, int Stock, decimal Costo)[]
         {
-            ("Amoxicilina 250mg",    "Medicamento",   "Comprimido",  45),
-            ("Ibuprofeno Vet.",      "Medicamento",   "Comprimido",  30),
-            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12),
-            ("Jeringa 5ml",          "Material",      "Unidad",     150),
-            ("Algodón Estéril",      "Material",      "Rollo",        8),
-            ("Bisturí #22",          "Instrumental",  "Unidad",       3),
-            ("Ivermectina 1%",       "Medicamento",   "ml",          20),
-            ("Sutura 3/0",           "Material",      "Unidad",      35),
-            ("Guantes Estériles M",  "Material",      "Par",         80),
-            ("Suero Fisiológico",    "Líquido",       "Frasco",       5),
+            ("Amoxicilina 250mg",    "Medicamento",   "Comprimido",  45,   850m),
+            ("Ibuprofeno Vet.",      "Medicamento",   "Comprimido",  30,   600m),
+            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12,  4200m),
+            ("Jeringa 5ml",          "Material",      "Unidad",     150,   300m),
+            ("Algodón Estéril",      "Material",      "Rollo",        8,  2500m),
+            ("Bisturí #22",          "Instrumental",  "Unidad",       3,  1800m),
+            ("Ivermectina 1%",       "Medicamento",   "ml",          20,  1200m),
+            ("Sutura 3/0",           "Material",      "Unidad",      35,  3500m),
+            ("Guantes Estériles M",  "Material",      "Par",         80,   450m),
+            ("Suero Fisiológico",    "Líquido",       "Frasco",       5,  2800m),
         };
 
         var productosExistentes = new HashSet<string>(
             (await _productoService.ObtenerTodosAsync()).Select(p => p.Nombre),
             StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (nombre, tipo, unidad, stock) in productosData)
+        foreach (var (nombre, tipo, unidad, stock, costo) in productosData)
         {
             if (productosExistentes.Contains(nombre))
                 continue;
@@ -134,6 +134,7 @@ public class SeedController : ControllerBase
                 Tipo            = tipo,
                 UnidadMedida    = unidad,
                 StockDisponible = stock,
+                CostoUnitario   = costo,
             });
         }
 
