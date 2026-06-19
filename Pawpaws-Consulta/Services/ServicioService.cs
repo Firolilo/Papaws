@@ -1,5 +1,6 @@
 using Cassandra;
 using Pawpaws.Consulta.DTOs;
+using Pawpaws.Consulta.Exceptions;
 using Pawpaws.Consulta.Models;
 
 namespace Pawpaws.Consulta.Services;
@@ -40,6 +41,8 @@ public class ServicioService : IServicioService
 
     public async Task<Servicio> CrearAsync(CrearServicioDto dto)
     {
+        await GarantizarNombreUnicoAsync(dto.Nombre, null);
+
         var servicio = new Servicio
         {
             Id = Guid.NewGuid(),
@@ -62,8 +65,24 @@ public class ServicioService : IServicioService
             return false;
         }
 
+        await GarantizarNombreUnicoAsync(dto.Nombre, id);
+
         await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Descripcion, dto.DuracionEstimadaMinutos, dto.PrecioBase, id));
         return true;
+    }
+
+    // Rechaza nombres repetidos entre servicios activos (case-insensitive). Los dados de baja
+    // no cuentan: su nombre puede reutilizarse.
+    private async Task GarantizarNombreUnicoAsync(string nombre, Guid? excluyendoId)
+    {
+        var activos = await ObtenerTodosAsync();
+        var colision = activos.Any(s =>
+            s.Id != excluyendoId &&
+            s.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase));
+        if (colision)
+        {
+            throw new ConflictoException($"Ya existe un servicio activo llamado '{nombre}'.");
+        }
     }
 
     public async Task<bool> EliminarAsync(Guid id)

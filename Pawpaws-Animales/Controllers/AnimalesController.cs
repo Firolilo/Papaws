@@ -66,6 +66,25 @@ public class AnimalesController : ControllerBase
     }
 
     [Authorize(Roles = Roles.GestionAnimales)]
+    [HttpPut("{id:guid}/estado")]
+    public async Task<IActionResult> CambiarEstado(Guid id, CambiarEstadoAnimalDto dto)
+    {
+        var actualizado = await _animalService.RegistrarEstadoAsync(id, dto.Estado, dto.FechaSalida, dto.AdoptanteRescatistaId, dto.Nota);
+        if (!actualizado)
+            return NotFound(new { mensaje = "Animal no encontrado." });
+
+        return NoContent();
+    }
+
+    [Authorize(Roles = Roles.LecturaAnimales)]
+    [HttpGet("{id:guid}/adopciones")]
+    public async Task<IActionResult> ObtenerHistorialAdopciones(Guid id)
+    {
+        var eventos = await _animalService.ObtenerEventosAdopcionAsync(id);
+        return Ok(eventos.ToResponse());
+    }
+
+    [Authorize(Roles = Roles.GestionAnimales)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Eliminar(Guid id)
     {

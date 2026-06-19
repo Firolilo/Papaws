@@ -7,7 +7,9 @@ public class DetalleConsultaDto
     public DateTime FechaCita { get; set; }
     public string Estado { get; set; } = string.Empty;
     public Guid IdAnimal { get; set; }
+    public string NombreAnimal { get; set; } = string.Empty;
     public Guid IdVeterinario { get; set; }
+    public string NombreVeterinario { get; set; } = string.Empty;
     public List<Guid> ServicioIds { get; set; } = new();
     public string Observaciones { get; set; } = string.Empty;
     public string? Diagnostico { get; set; }

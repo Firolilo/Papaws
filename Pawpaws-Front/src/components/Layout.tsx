@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   BarChart2,
+  Building2,
   CalendarHeart,
   HeartHandshake,
   Home,
@@ -19,6 +20,7 @@ const nav = [
   { to: "/consultas", label: "Consultas", icon: CalendarHeart, soloConsultas: true },
   { to: "/animales", label: "Animales", icon: PawPrint, soloConsultas: false },
   { to: "/rescatistas", label: "Rescatistas", icon: HeartHandshake, soloConsultas: false },
+  { to: "/organizaciones", label: "Organizaciones", icon: Building2, soloConsultas: false },
   { to: "/veterinarios", label: "Veterinarios", icon: Stethoscope, soloConsultas: true },
   { to: "/servicios", label: "Servicios", icon: Syringe, soloConsultas: true },
   { to: "/productos", label: "Inventario", icon: Pill, soloConsultas: true },

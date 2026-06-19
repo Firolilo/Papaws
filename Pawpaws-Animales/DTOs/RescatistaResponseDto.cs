@@ -6,5 +6,7 @@ public sealed record RescatistaResponseDto(
     string TelefonoContacto,
     string CorreoElectronico,
     string Organizacion,
+    Guid? OrganizacionId,
     string ZonaOperacion,
-    bool Oculto);
+    bool Oculto,
+    bool Activo);

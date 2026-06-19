@@ -11,43 +11,71 @@ namespace Pawpaws.Animales.Controllers;
 public class SeedController : ControllerBase
 {
     private readonly IRescatistaService _rescatistaService;
+    private readonly IOrganizacionService _organizacionService;
     private readonly IAnimalService _animalService;
 
-    public SeedController(IRescatistaService rescatistaService, IAnimalService animalService)
+    public SeedController(IRescatistaService rescatistaService, IOrganizacionService organizacionService, IAnimalService animalService)
     {
         _rescatistaService = rescatistaService;
+        _organizacionService = organizacionService;
         _animalService = animalService;
     }
 
     [HttpPost]
     public async Task<IActionResult> Sembrar()
     {
-        // Idempotente: un rescatista ya existente (mismo correo) se reutiliza en vez de duplicarse.
+        // ── Organizaciones (idempotente por nombre) ────────────────────────────
+        var organizacionesData = new (string Nombre, string Tipo)[]
+        {
+            ("Refugio Norte", "Refugio"), ("Patitas Sur", "ONG"), ("Refugio Este", "Refugio"),
+            ("Hogar Animal", "ONG"), ("Centro Canino", "ONG"), ("Patas al Sur", "ONG"),
+            ("Animal Rescue BA", "ONG"), ("Fundación Vida Animal", "ONG"),
+        };
+
+        var orgIdPorNombre = (await _organizacionService.ObtenerTodosAsync())
+            .GroupBy(o => o.Nombre, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (nombre, tipo) in organizacionesData)
+        {
+            if (orgIdPorNombre.ContainsKey(nombre)) continue;
+            var o = await _organizacionService.CrearAsync(new CrearOrganizacionDto { Nombre = nombre, Tipo = tipo });
+            orgIdPorNombre[nombre] = o.Id;
+        }
+
+        // ── Rescatistas (idempotente por correo, vinculados a su organización) ──
         var rescatistasExistentes = (await _rescatistaService.ObtenerTodosAsync())
             .GroupBy(r => r.CorreoElectronico, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
 
-        var rescatistas = new[]
+        var rescatistasData = new (string Nombre, string Tel, string Correo, string Org, string Zona)[]
         {
-            new CrearRescatistaDto { NombreCompleto = "María García",       TelefonoContacto = "555-1001", CorreoElectronico = "maria.garcia@papaws.org",       Organizacion = "Refugio Norte",        ZonaOperacion = "Norte"  },
-            new CrearRescatistaDto { NombreCompleto = "Carlos López",       TelefonoContacto = "555-1002", CorreoElectronico = "carlos.lopez@papaws.org",       Organizacion = "Patitas Sur",           ZonaOperacion = "Sur"    },
-            new CrearRescatistaDto { NombreCompleto = "Ana Martínez",       TelefonoContacto = "555-1003", CorreoElectronico = "ana.martinez@papaws.org",       Organizacion = "Refugio Este",          ZonaOperacion = "Este"   },
-            new CrearRescatistaDto { NombreCompleto = "Luis Rodríguez",     TelefonoContacto = "555-1004", CorreoElectronico = "luis.rodriguez@papaws.org",     Organizacion = "Hogar Animal",          ZonaOperacion = "Oeste"  },
-            new CrearRescatistaDto { NombreCompleto = "Sofía Hernández",    TelefonoContacto = "555-1005", CorreoElectronico = "sofia.hernandez@papaws.org",    Organizacion = "Centro Canino",         ZonaOperacion = "Centro" },
-            new CrearRescatistaDto { NombreCompleto = "Valentina Torres",   TelefonoContacto = "555-1006", CorreoElectronico = "valentina.torres@papaws.org",   Organizacion = "Patas al Sur",          ZonaOperacion = "Sur"    },
-            new CrearRescatistaDto { NombreCompleto = "Diego Ramírez",      TelefonoContacto = "555-1007", CorreoElectronico = "diego.ramirez@papaws.org",      Organizacion = "Animal Rescue BA",      ZonaOperacion = "Norte"  },
-            new CrearRescatistaDto { NombreCompleto = "Lucía Pérez",        TelefonoContacto = "555-1008", CorreoElectronico = "lucia.perez@papaws.org",        Organizacion = "Fundación Vida Animal",  ZonaOperacion = "Centro" },
+            ("María García",     "555-1001", "maria.garcia@papaws.org",     "Refugio Norte",          "Norte"),
+            ("Carlos López",     "555-1002", "carlos.lopez@papaws.org",     "Patitas Sur",            "Sur"),
+            ("Ana Martínez",     "555-1003", "ana.martinez@papaws.org",     "Refugio Este",           "Este"),
+            ("Luis Rodríguez",   "555-1004", "luis.rodriguez@papaws.org",   "Hogar Animal",           "Oeste"),
+            ("Sofía Hernández",  "555-1005", "sofia.hernandez@papaws.org",  "Centro Canino",          "Centro"),
+            ("Valentina Torres", "555-1006", "valentina.torres@papaws.org", "Patas al Sur",           "Sur"),
+            ("Diego Ramírez",    "555-1007", "diego.ramirez@papaws.org",    "Animal Rescue BA",       "Norte"),
+            ("Lucía Pérez",      "555-1008", "lucia.perez@papaws.org",      "Fundación Vida Animal",  "Centro"),
         };
 
         var rIds = new List<Guid>();
-        foreach (var dto in rescatistas)
+        foreach (var (nombre, tel, correo, org, zona) in rescatistasData)
         {
-            if (rescatistasExistentes.TryGetValue(dto.CorreoElectronico, out var existenteId))
+            if (rescatistasExistentes.TryGetValue(correo, out var existenteId))
             {
                 rIds.Add(existenteId);
                 continue;
             }
-            var r = await _rescatistaService.CrearAsync(dto);
+            var r = await _rescatistaService.CrearAsync(new CrearRescatistaDto
+            {
+                NombreCompleto = nombre,
+                TelefonoContacto = tel,
+                CorreoElectronico = correo,
+                OrganizacionId = orgIdPorNombre[org],
+                ZonaOperacion = zona,
+            });
             rIds.Add(r.Id);
         }
 

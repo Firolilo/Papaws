@@ -59,6 +59,24 @@ public class AnimalesClient : IAnimalesClient
         return await response.Content.ReadFromJsonAsync<RescatistaExternoDto>();
     }
 
+    public async Task<OrganizacionExternoDto?> GetOrganizacionByIdAsync(Guid id)
+    {
+        using var request = CrearRequest(HttpMethod.Get, $"api/organizaciones/{id}");
+        using var response = await _httpClient.SendAsync(request);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<OrganizacionExternoDto>();
+    }
+
+    public async Task<List<OrganizacionExternoDto>> GetOrganizacionesAsync()
+    {
+        using var request = CrearRequest(HttpMethod.Get, "api/organizaciones?tamano=100");
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        var pagina = await response.Content.ReadFromJsonAsync<PaginaExternaDto<OrganizacionExternoDto>>();
+        return pagina?.Items ?? new();
+    }
+
     private HttpRequestMessage CrearRequest(HttpMethod method, string url)
     {
         var request = new HttpRequestMessage(method, url);

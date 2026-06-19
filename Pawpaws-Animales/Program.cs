@@ -86,6 +86,7 @@ builder.Services.AddHttpClient<IConsultaReferenceService, ConsultaReferenceServi
 });
 
 builder.Services.AddScoped<IRescatistaService, RescatistaService>();
+builder.Services.AddScoped<IOrganizacionService, OrganizacionService>();
 builder.Services.AddScoped<IAnimalService, AnimalService>();
 builder.Services.AddScoped<IDatosPruebaService, DatosPruebaService>();
 builder.Services.AddScoped<IHealthService, HealthService>();

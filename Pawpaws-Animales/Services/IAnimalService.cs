@@ -14,4 +14,11 @@ public interface IAnimalService
 
     // Mueve todos los animales de un rescatista a otro. Devuelve cuántos se reasignaron.
     Task<int> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId);
+
+    // Cambia el estado de adopción. "Adoptado" registra salida + adoptante; "Devuelto" registra
+    // la devolución conservando la adopción previa en el historial.
+    Task<bool> RegistrarEstadoAsync(Guid id, string estado, DateTime? fechaSalida, Guid? adoptanteRescatistaId, string? nota);
+
+    // Historial inmutable de adopciones y devoluciones del animal.
+    Task<List<EventoAdopcion>> ObtenerEventosAdopcionAsync(Guid animalId);
 }

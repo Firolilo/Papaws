@@ -42,13 +42,29 @@ async function handle<T>(res: Response): Promise<T> {
   const data = text ? JSON.parse(text) : undefined;
 
   if (!res.ok) {
-    const message =
-      (data && (data.mensaje || data.message || data.title)) ||
-      `Error ${res.status}`;
-    throw new Error(message);
+    throw new Error(extraerMensajeError(data, res.status));
   }
 
   return data as T;
+}
+
+/**
+ * Saca un mensaje legible del cuerpo de error. Prioriza los mensajes propios
+ * (mensaje/message), luego los errores de validación de ASP.NET
+ * (ValidationProblemDetails.errors) y por último el título genérico.
+ */
+function extraerMensajeError(data: any, status: number): string {
+  if (data) {
+    if (data.mensaje) return data.mensaje;
+    if (data.message) return data.message;
+    // ValidationProblemDetails: { errors: { Campo: ["msg1", ...] } }
+    if (data.errors && typeof data.errors === "object") {
+      const primero = Object.values(data.errors).flat()[0];
+      if (typeof primero === "string" && primero.trim()) return primero;
+    }
+    if (data.title) return data.title;
+  }
+  return `Error ${status}`;
 }
 
 export async function apiGet<T>(zone: ApiZone, path: string): Promise<T> {

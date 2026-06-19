@@ -32,6 +32,10 @@ const estados: EstadoConsulta[] = [
   "Completada",
 ];
 
+// Al agendar, una consulta solo puede nacer Pendiente o Confirmada. "Completada" requiere
+// diagnóstico/productos (se cargan después de atender) y "Cancelada" no aplica al crear.
+const estadosCreacion: EstadoConsulta[] = ["Pendiente", "Confirmada"];
+
 function nowLocalDatetime(): string {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -358,6 +362,8 @@ export function Consultas() {
               label="Código"
               hint="único"
               required
+              minLength={3}
+              maxLength={60}
               value={form.codigo}
               onChange={(e) => setForm({ ...form, codigo: e.target.value })}
             />
@@ -402,10 +408,10 @@ export function Consultas() {
           </div>
 
           <Combobox
-            label="Estado"
+            label="Estado inicial"
             value={form.estado}
             onChange={(v) => setForm({ ...form, estado: v })}
-            options={estados.map((e) => ({ value: e, label: e }))}
+            options={estadosCreacion.map((e) => ({ value: e, label: e }))}
             searchPlaceholder="Buscar estado…"
           />
 
@@ -422,6 +428,7 @@ export function Consultas() {
 
           <Textarea
             label="Observaciones"
+            maxLength={500}
             value={form.observaciones}
             onChange={(e) =>
               setForm({ ...form, observaciones: e.target.value })

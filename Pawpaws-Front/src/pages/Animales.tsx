@@ -7,6 +7,7 @@ import { Input } from "../components/Field";
 import { Combobox } from "../components/Combobox";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
+import { Badge, Tone } from "../components/Badge";
 import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
@@ -19,6 +20,19 @@ const emptyForm: CrearAnimalDto = {
   especie: "",
   pesoActual: 0,
   rescatistaId: "",
+};
+
+const ESTADO_TONE: Record<string, Tone> = {
+  Disponible: "blue",
+  EnTratamiento: "sun",
+  Adoptado: "moss",
+  Devuelto: "clay",
+};
+const ESTADO_LABEL: Record<string, string> = {
+  Disponible: "Disponible",
+  EnTratamiento: "En tratamiento",
+  Adoptado: "Adoptado",
+  Devuelto: "Devuelto",
 };
 
 export function Animales() {
@@ -218,6 +232,9 @@ export function Animales() {
                       <th className="text-left font-semibold px-5 py-3">
                         Especie
                       </th>
+                      <th className="text-left font-semibold px-5 py-3">
+                        Estado
+                      </th>
                       <th className="text-right font-semibold px-5 py-3">
                         Peso
                       </th>
@@ -255,6 +272,11 @@ export function Animales() {
                         </td>
                         <td className="px-5 py-3.5 text-ink-500">
                           {a.especie}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Badge tone={ESTADO_TONE[a.estado] ?? "neutral"}>
+                            {ESTADO_LABEL[a.estado] ?? a.estado}
+                          </Badge>
                         </td>
                         <td className="px-5 py-3.5 text-right font-mono text-[12.5px]">
                           {Number(a.pesoActual).toFixed(2)} kg
@@ -310,6 +332,7 @@ export function Animales() {
           <Input
             label="Nombre"
             required
+            maxLength={100}
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
@@ -317,6 +340,7 @@ export function Animales() {
             <Input
               label="Especie"
               required
+              maxLength={80}
               placeholder="Puma, Loro, Tortuga…"
               value={form.especie}
               onChange={(e) => setForm({ ...form, especie: e.target.value })}
@@ -327,6 +351,7 @@ export function Animales() {
               type="number"
               step="0.01"
               min="0.01"
+              max="1000"
               required
               value={form.pesoActual || ""}
               onChange={(e) =>

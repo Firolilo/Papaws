@@ -1,20 +1,50 @@
+export interface Organizacion {
+  id: string;
+  nombre: string;
+  tipo: string;
+}
+
+export interface CrearOrganizacionDto {
+  nombre: string;
+  tipo: string;
+}
+
+export type ActualizarOrganizacionDto = CrearOrganizacionDto;
+
 export interface Rescatista {
   id: string;
   nombreCompleto: string;
   telefonoContacto: string;
   correoElectronico: string;
+  // Nombre de la organización (snapshot para mostrar).
   organizacion: string;
+  organizacionId?: string | null;
   zonaOperacion: string;
   // Rescatista interno (p. ej. "Refugio"): no se ofrece como seleccionable ni se gestiona.
   oculto: boolean;
+  // false = dado de baja. Los listados solo traen activos; al pedirlo por id puede venir en baja.
+  activo: boolean;
 }
 
 export interface CrearRescatistaDto {
   nombreCompleto: string;
   telefonoContacto: string;
   correoElectronico: string;
-  organizacion: string;
+  organizacionId: string;
   zonaOperacion: string;
+}
+
+export type EstadoAnimal =
+  | "Disponible"
+  | "EnTratamiento"
+  | "Adoptado"
+  | "Devuelto";
+
+export interface EventoAdopcion {
+  fecha: string;
+  tipo: "Adoptado" | "Devuelto" | string;
+  rescatistaId?: string | null;
+  nota?: string | null;
 }
 
 export interface Animal {
@@ -24,6 +54,16 @@ export interface Animal {
   pesoActual: number;
   fechaIngreso: string;
   rescatistaId: string;
+  estado: EstadoAnimal | string;
+  fechaSalida?: string | null;
+  adoptanteRescatistaId?: string | null;
+}
+
+export interface CambiarEstadoAnimalDto {
+  estado: string;
+  fechaSalida?: string | null;
+  adoptanteRescatistaId?: string | null;
+  nota?: string | null;
 }
 
 export interface CrearAnimalDto {
@@ -89,6 +129,12 @@ export interface Consulta {
   observaciones: string;
   diagnostico?: string | null;
   indicacionesSeguimiento?: string | null;
+  tratamiento?: string | null;
+  ameritaTratamiento?: boolean | null;
+  proximoControl?: string | null;
+  peso?: number | null;
+  temperatura?: number | null;
+  condicionCorporal?: string | null;
   animalId: string;
   veterinarioId: string;
   servicioIds: string[];
@@ -126,6 +172,12 @@ export interface CrearConsultaDto {
 export interface RegistrarDiagnosticoDto {
   diagnostico: string;
   indicacionesSeguimiento: string;
+  tratamiento?: string | null;
+  ameritaTratamiento?: boolean | null;
+  proximoControl?: string | null;
+  peso?: number | null;
+  temperatura?: number | null;
+  condicionCorporal?: string | null;
 }
 
 export interface ProductoUsadoDto {

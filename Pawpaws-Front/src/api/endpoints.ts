@@ -7,15 +7,20 @@ import type {
   ActualizarServicioDto,
   ActualizarVeterinarioDto,
   Animal,
+  CambiarEstadoAnimalDto,
   CambiarEstadoConsultaDto,
   Consulta,
   CrearAnimalDto,
   CrearConsultaDto,
   CrearProductoDto,
+  CrearOrganizacionDto,
+  ActualizarOrganizacionDto,
+  Organizacion,
   CrearRescatistaDto,
   CrearServicioDto,
   CrearVeterinarioDto,
   EstablecerStockDto,
+  EventoAdopcion,
   LoginDto,
   Producto,
   ProductoUsadoDto,
@@ -47,6 +52,16 @@ export const rescatistasApi = {
     ),
 };
 
+export const organizacionesApi = {
+  list: () => apiList<Organizacion>("animales", "/api/organizaciones"),
+  get: (id: string) => apiGet<Organizacion>("animales", `/api/organizaciones/${id}`),
+  create: (dto: CrearOrganizacionDto) =>
+    apiPost<Organizacion>("animales", "/api/organizaciones", dto),
+  update: (id: string, dto: ActualizarOrganizacionDto) =>
+    apiPut<void>("animales", `/api/organizaciones/${id}`, dto),
+  remove: (id: string) => apiDelete("animales", `/api/organizaciones/${id}`),
+};
+
 export const animalesApi = {
   list: () => apiList<Animal>("animales", "/api/animales"),
   get: (id: string) => apiGet<Animal>("animales", `/api/animales/${id}`),
@@ -56,6 +71,10 @@ export const animalesApi = {
     apiPost<Animal>("animales", "/api/animales", dto),
   update: (id: string, dto: CrearAnimalDto) =>
     apiPut<void>("animales", `/api/animales/${id}`, dto),
+  cambiarEstado: (id: string, dto: CambiarEstadoAnimalDto) =>
+    apiPut<void>("animales", `/api/animales/${id}/estado`, dto),
+  adopciones: (id: string) =>
+    apiGet<EventoAdopcion[]>("animales", `/api/animales/${id}/adopciones`),
   remove: (id: string) => apiDelete("animales", `/api/animales/${id}`),
 };
 
@@ -160,6 +179,7 @@ export const reportesApi = {
   c16_consultasPorFecha:      (fecha: string)     => reportesGet<unknown>(`/api/reportes/consultas/por-fecha/${fecha}?tamano=100`),
   c17_animalesPorNombre:      (nombre: string)    => reportesGet<unknown>(`/api/reportes/animales/nombre/${encodeURIComponent(nombre)}?tamano=100`),
   c19_rescatistasPorZona:     (zona: string)      => reportesGet<unknown>(`/api/reportes/rescatistas/zona/${encodeURIComponent(zona)}?tamano=100`),
+  c20_organizacionDetalle:    (id: string)        => reportesGet<unknown>(`/api/reportes/organizaciones/${id}/detalle`),
 };
 
 // ── Seed (solo desarrollo) ─────────────────────────────────────────────────

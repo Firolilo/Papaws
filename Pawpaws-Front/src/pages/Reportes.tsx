@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import {
   BarChart2, ChevronDown, Database, Loader2, Search,
-  RefreshCw, CheckCircle2, AlertCircle, X, ArrowLeft, ChevronRight,
+  RefreshCw, CheckCircle2, AlertCircle, X, ArrowLeft, ChevronRight, FileDown,
 } from "lucide-react";
 import { Card, ErrorBox, Spinner } from "../components/Card";
 import { Badge, estadoTone } from "../components/Badge";
@@ -13,9 +13,9 @@ import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
 import {
   animalesApi, consultasApi, rescatistasApi, veterinariosApi,
-  productosApi, serviciosApi, reportesApi, seedApi,
+  productosApi, serviciosApi, organizacionesApi, reportesApi, seedApi,
 } from "../api/endpoints";
-import type { Animal, Consulta, Rescatista, Veterinario, Servicio, Producto } from "../types";
+import type { Animal, Consulta, Rescatista, Veterinario, Servicio, Producto, Organizacion } from "../types";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -119,7 +119,7 @@ function SearchableSelect({ options, value, onChange, placeholder }: {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type InputType = "none" | "rescatista" | "animal" | "veterinario" | "servicio"
-  | "producto" | "codigo" | "texto" | "estado" | "fecha" | "zona" | "especie" | "especialidad";
+  | "producto" | "codigo" | "texto" | "estado" | "fecha" | "zona" | "especie" | "especialidad" | "organizacion";
 
 interface ReportCol { key: string; label: string; render?: (v: unknown, row: Record<string, unknown>) => React.ReactNode; }
 interface ReportCfg {
@@ -150,6 +150,16 @@ const paginaItems = (data: unknown): unknown[] => {
   return [data];
 };
 
+// Muestra el nombre de una referencia (animal / veterinario) ya resuelto por el backend.
+// Las referencias dadas de baja o eliminadas vienen marcadas y se resaltan en vez de quedar
+// en blanco. Si el backend no mandó nombre (respuesta vieja), cae al ID corto.
+function RefName({ value, id }: { value: unknown; id?: unknown }) {
+  const nombre = typeof value === "string" ? value.trim() : "";
+  if (!nombre) return <span className="font-mono text-xs text-ink-400">{shortId(id)}</span>;
+  const huerfano = /\((dado de baja|eliminado)\)/i.test(nombre);
+  return <span className={huerfano ? "text-clay-500 italic" : ""}>{nombre}</span>;
+}
+
 // ─── Shared column sets ───────────────────────────────────────────────────────
 const ANIMAL_COLS: ReportCol[] = [
   { key: "idAnimal",    label: "ID",      render: (v) => <span className="font-mono text-xs text-ink-400">{shortId(v)}</span> },
@@ -161,7 +171,7 @@ const CONSULTA_ESTADO_COLS: ReportCol[] = [
   { key: "estado",    label: "Estado",  render: (v) => <Badge tone={estadoTone(String(v))}>{String(v)}</Badge> },
   { key: "fechaCita", label: "Fecha",   render: (v) => `${fmtDate(String(v))} ${fmtTime(String(v))}` },
   { key: "codReserva",label: "Código",  render: (v) => <span className="font-mono text-sm">{String(v)}</span> },
-  { key: "idAnimal",  label: "Animal",  render: (v) => <span className="font-mono text-xs text-ink-400">{shortId(v)}</span> },
+  { key: "nombreAnimal", label: "Animal", render: (v, r) => <RefName value={v} id={(r as any).idAnimal} /> },
 ];
 const PRODUCTO_COLS: ReportCol[] = [
   { key: "idProducto",     label: "ID",     render: (v) => <span className="font-mono text-xs text-ink-400">{shortId(v)}</span> },
@@ -177,17 +187,18 @@ const REPORTS: ReportCfg[] = [
   { id:"c1",  chebotko:"C1",  label:"Rescatista por ID",          group:"Rescatistas", desc:"Información completa de un rescatista.", inputType:"rescatista", inputLabel:"Rescatista", fetch:(id)=>reportesApi.c1_rescatistaPorId(id), rows:(d)=>(d?[d]:[]), cols:[{key:"idRescatista",label:"ID",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>},{key:"nombreCompleto",label:"Nombre"},{key:"telefono",label:"Teléfono"},{key:"email",label:"Email"},{key:"organizacion",label:"Organización"},{key:"zonaOperacion",label:"Zona"}] },
   { id:"c2",  chebotko:"C2",  label:"Animales por rescatista",    group:"Rescatistas", desc:"Todos los animales ingresados por un rescatista.", inputType:"rescatista", inputLabel:"Rescatista", fetch:(id)=>reportesApi.c2_animalesPorRescatista(id), rows:(d:any)=>d?.animales??[], header:(d:any)=>d?{title:d.nombreRescatista,sub:`ID ${shortId(d.idRescatista)}`}:null, cols:ANIMAL_COLS },
   { id:"c19", chebotko:"C19", label:"Rescatistas por zona",       group:"Rescatistas", desc:"Todos los rescatistas activos en una zona.", inputType:"zona", inputLabel:"Zona", fetch:(zona)=>reportesApi.c19_rescatistasPorZona(zona), rows:paginaItems, cols:[{key:"idRescatista",label:"ID",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>},{key:"nombreCompleto",label:"Nombre"},{key:"telefono",label:"Teléfono"},{key:"zonaOperacion",label:"Zona"}] },
+  { id:"c20", chebotko:"C20", label:"Organización → rescatistas → animales", group:"Rescatistas", desc:"Rescatistas de una organización y los animales de cada uno.", inputType:"organizacion", inputLabel:"Organización", fetch:(id)=>reportesApi.c20_organizacionDetalle(id), rows:(d:any)=>d?.filas??[], header:(d:any)=>d?{title:d.nombreOrganizacion,sub:`${d.tipo} · ${d.totalRescatistas} rescatista${d.totalRescatistas===1?"":"s"} · ${d.totalAnimales} animal${d.totalAnimales===1?"":"es"}`}:null, cols:[{key:"nombreRescatista",label:"Rescatista"},{key:"nombreAnimal",label:"Animal",render:(v)=>v?String(v):<span className="text-ink-400 italic">(sin animales)</span>},{key:"especie",label:"Especie",render:(v)=>v?<Badge tone="moss">{String(v)}</Badge>:<span className="text-ink-400">—</span>},{key:"fechaIngreso",label:"Ingreso",render:(v)=>v?fmtDate(String(v)):"—"}] },
   // ANIMALES
   { id:"c3",  chebotko:"C3",  label:"Animales por especie",       group:"Animales",    desc:"Todos los animales filtrados por especie.", inputType:"especie", inputLabel:"Especie", fetch:(esp)=>reportesApi.c3_animalesPorEspecie(esp), rows:paginaItems, cols:ANIMAL_COLS },
-  { id:"c4",  chebotko:"C4",  label:"Consultas por animal",       group:"Animales",    desc:"Historial de consultas de un animal.", inputType:"animal", inputLabel:"Animal", fetch:(id)=>reportesApi.c4_consultasPorAnimal(id), rows:(d:any)=>d?.consultas??[], header:(d:any)=>d?{title:d.nombreAnimal,sub:d.especie}:null, cols:[{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"observaciones",label:"Observaciones"}] },
+  { id:"c4",  chebotko:"C4",  label:"Consultas por animal",       group:"Animales",    desc:"Historial de consultas de un animal.", inputType:"animal", inputLabel:"Animal", fetch:(id)=>reportesApi.c4_consultasPorAnimal(id), rows:(d:any)=>d?.consultas??[], header:(d:any)=>d?{title:d.nombreAnimal,sub:d.especie}:null, cols:[{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"nombreVeterinario",label:"Veterinario",render:(v,r)=><RefName value={v} id={(r as any).idVeterinario} />},{key:"observaciones",label:"Observaciones"}] },
   { id:"c17", chebotko:"C17", label:"Animales por nombre",        group:"Animales",    desc:"Buscar animales por nombre (parcial).", inputType:"texto", inputLabel:"Nombre del animal", fetch:(n)=>reportesApi.c17_animalesPorNombre(n), rows:paginaItems, cols:ANIMAL_COLS },
   // CONSULTAS
-  { id:"c15", chebotko:"C15", label:"Consulta por código",        group:"Consultas",   desc:"Datos de una consulta por su código.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c15_consultaPorCodigo(c), rows:(d)=>(d?[d]:[]), cols:[{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono">{String(v)}</span>},{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"idAnimal",label:"Animal",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>},{key:"idVeterinario",label:"Vet",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>}] },
-  { id:"c6",  chebotko:"C6",  label:"Detalle de consulta",        group:"Consultas",   desc:"Detalle completo incluyendo servicios y diagnóstico.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c6_detalleConsulta(c), rows:(d)=>(d?[d]:[]), cols:[{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono">{String(v)}</span>},{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"observaciones",label:"Observaciones"},{key:"diagnostico",label:"Diagnóstico"}] },
+  { id:"c15", chebotko:"C15", label:"Consulta por código",        group:"Consultas",   desc:"Datos de una consulta por su código.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c15_consultaPorCodigo(c), rows:(d)=>(d?[d]:[]), cols:[{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono">{String(v)}</span>},{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"nombreAnimal",label:"Animal",render:(v,r)=><RefName value={v} id={(r as any).idAnimal} />},{key:"nombreVeterinario",label:"Vet",render:(v,r)=><RefName value={v} id={(r as any).idVeterinario} />}] },
+  { id:"c6",  chebotko:"C6",  label:"Detalle de consulta",        group:"Consultas",   desc:"Detalle completo incluyendo servicios y diagnóstico.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c6_detalleConsulta(c), rows:(d)=>(d?[d]:[]), cols:[{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono">{String(v)}</span>},{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"nombreAnimal",label:"Animal",render:(v,r)=><RefName value={v} id={(r as any).idAnimal} />},{key:"nombreVeterinario",label:"Veterinario",render:(v,r)=><RefName value={v} id={(r as any).idVeterinario} />},{key:"observaciones",label:"Observaciones"},{key:"diagnostico",label:"Diagnóstico"}] },
   { id:"c7",  chebotko:"C7",  label:"Consultas por estado",       group:"Consultas",   desc:"Todas las consultas filtradas por estado.", inputType:"estado", inputLabel:"Estado", fetch:(e)=>reportesApi.c7_consultasPorEstado(e), rows:paginaItems, cols:CONSULTA_ESTADO_COLS },
   { id:"c8",  chebotko:"C8",  label:"Servicios por consulta",     group:"Consultas",   desc:"Todos los servicios de una consulta.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c8_serviciosPorConsulta(c), rows:(d)=>(Array.isArray(d)?d:[]), cols:[{key:"nombreServicio",label:"Servicio"},{key:"duracionEstimadaMinutos",label:"Duración (min)"},{key:"precioBase",label:"Costo",render:(v)=>`$${Number(v).toLocaleString("es")}`}] },
   { id:"c9",  chebotko:"C9",  label:"Productos por consulta",     group:"Consultas",   desc:"Todos los productos usados en una consulta.", inputType:"codigo", inputLabel:"Código de consulta", fetch:(c)=>reportesApi.c9_productosPorConsulta(c), rows:(d)=>(Array.isArray(d)?d:[]), cols:[{key:"nombreProducto",label:"Producto"},{key:"cantidadUsada",label:"Cantidad"},{key:"idProducto",label:"ID",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>}] },
-  { id:"c16", chebotko:"C16", label:"Consultas por fecha",        group:"Consultas",   desc:"Consultas programadas en una fecha.", inputType:"fecha", inputLabel:"Fecha", fetch:(f)=>reportesApi.c16_consultasPorFecha(f), rows:paginaItems, cols:[{key:"fechaCita",label:"Hora",render:(v)=>fmtTime(String(v))},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"idAnimal",label:"Animal",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>}] },
+  { id:"c16", chebotko:"C16", label:"Consultas por fecha",        group:"Consultas",   desc:"Consultas programadas en una fecha.", inputType:"fecha", inputLabel:"Fecha", fetch:(f)=>reportesApi.c16_consultasPorFecha(f), rows:paginaItems, cols:[{key:"fechaCita",label:"Hora",render:(v)=>fmtTime(String(v))},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"nombreAnimal",label:"Animal",render:(v,r)=><RefName value={v} id={(r as any).idAnimal} />},{key:"nombreVeterinario",label:"Vet",render:(v,r)=><RefName value={v} id={(r as any).idVeterinario} />}] },
   // VETERINARIOS
   { id:"c12", chebotko:"C12", label:"Veterinario por ID",         group:"Veterinarios",desc:"Información de un veterinario.", inputType:"veterinario", inputLabel:"Veterinario", fetch:(id)=>reportesApi.c12_veterinarioPorId(id), rows:(d)=>(d?[d]:[]), cols:[{key:"idVeterinario",label:"ID",render:(v)=><span className="font-mono text-xs text-ink-400">{shortId(v)}</span>},{key:"nombreCompleto",label:"Nombre"},{key:"telefonoContacto",label:"Teléfono"},{key:"especialidadPrincipal",label:"Especialidad",render:(v)=><Badge tone="sun">{String(v)}</Badge>}] },
   { id:"c5",  chebotko:"C5",  label:"Consultas por veterinario",  group:"Veterinarios",desc:"Historial de consultas de un veterinario.", inputType:"veterinario", inputLabel:"Veterinario", fetch:(id)=>reportesApi.c5_consultasPorVeterinario(id), rows:(d:any)=>d?.consultas??[], header:(d:any)=>d?{title:d.nombreVeterinario}:null, cols:[{key:"fechaCita",label:"Fecha",render:(v)=>`${fmtDate(String(v))} ${fmtTime(String(v))}`},{key:"codConsulta",label:"Código",render:(v)=><span className="font-mono text-sm">{String(v)}</span>},{key:"estado",label:"Estado",render:(v)=><Badge tone={estadoTone(String(v))}>{String(v)}</Badge>},{key:"observaciones",label:"Obs"}] },
@@ -202,13 +213,91 @@ const REPORTS: ReportCfg[] = [
 const GROUPS = ["Rescatistas", "Animales", "Consultas", "Veterinarios", "Servicios", "Productos"];
 // Reportes que solo consultan los servicios de Animales/Rescatistas (LecturaGlobal): visibles
 // para todos los roles. El resto llama al servicio de Consulta y requiere acceso a consultas.
-const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c3", "c17"];
+const REPORTES_TODOS_LOS_ROLES = ["c1", "c2", "c19", "c20", "c3", "c17"];
 const ESTADOS = ["Pendiente", "Confirmada", "Completada", "Cancelada"];
 const ESPECIE_OPTIONS:      SelectOption[] = ["Perro","Gato","Conejo","Ave","Loro","Tortuga","Hámster","Iguana","Gecko","Serpiente","Chinchilla"].map(e=>({value:e,label:e}));
 const ZONA_OPTIONS:         SelectOption[] = ["Norte","Sur","Este","Oeste","Centro"].map(z=>({value:z,label:z}));
 const ESPECIALIDAD_OPTIONS: SelectOption[] = ["Medicina General","Cirugía","Dermatología","Odontología","Exóticos","Nutrición"].map(e=>({value:e,label:e}));
 
-const AUTO_RUN_TYPES: InputType[] = ["rescatista","animal","veterinario","servicio","producto","estado","especie","especialidad","zona"];
+const AUTO_RUN_TYPES: InputType[] = ["rescatista","animal","veterinario","servicio","producto","estado","especie","especialidad","zona","organizacion"];
+
+// ─── Exportar reporte a PDF (impresión del navegador) ─────────────────────────
+function escHtml(v: unknown): string {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** Valor plano de una celda para el PDF: formatea fechas ISO y deja el resto como texto. */
+function celdaPdf(col: ReportCol, row: Record<string, unknown>): string {
+  const v = row[col.key];
+  if (v == null || v === "") return "—";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const d = new Date(v);
+    const conHora = /por fecha|consulta/i.test(col.label);
+    return conHora
+      ? d.toLocaleString("es", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  return String(v);
+}
+
+function exportarReportePdf(
+  titulo: string,
+  chebotko: string,
+  descripcion: string,
+  subtitulo: string | null,
+  cols: ReportCol[],
+  rows: unknown[]
+) {
+  const ths = cols.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
+  const trs = rows
+    .map(
+      (r) =>
+        `<tr>${cols
+          .map((c) => `<td>${escHtml(celdaPdf(c, r as Record<string, unknown>))}</td>`)
+          .join("")}</tr>`
+    )
+    .join("");
+
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>${escHtml(chebotko)} - ${escHtml(titulo)}</title>
+<style>
+  body { font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#2b2f33; margin:32px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0a9396; padding-bottom:10px; }
+  .brand { font-size:22px; font-weight:800; color:#005f73; }
+  .sub { color:#5a6068; font-size:12px; }
+  h1 { font-size:24px; color:#005f73; margin:16px 0 2px; }
+  .desc { color:#5a6068; margin:0 0 4px; }
+  .chip { display:inline-block; font-family:monospace; font-weight:700; background:#e7f3f1; color:#005f73; padding:2px 8px; border-radius:6px; font-size:12px; }
+  table { border-collapse:collapse; width:100%; margin-top:14px; font-size:12.5px; }
+  th { background:#f3efe6; text-align:left; padding:7px 9px; border-bottom:2px solid #e7e0d3; color:#5a6068; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
+  td { padding:6px 9px; border-bottom:1px solid #eee; vertical-align:top; }
+  tr:nth-child(even) td { background:#faf8f3; }
+  footer { margin-top:22px; border-top:1px solid #e7e0d3; padding-top:8px; color:#9aa0a6; font-size:11px; }
+  @media print { body { margin:14mm; } }
+</style></head><body>
+  <div class="top">
+    <div><div class="brand">🐾 Papaws</div><div class="sub">Refugio &amp; cuidado animal</div></div>
+    <div class="sub">Reporte generado el ${escHtml(
+      new Date().toLocaleDateString("es", { day: "2-digit", month: "long", year: "numeric" })
+    )}</div>
+  </div>
+  <h1><span class="chip">${escHtml(chebotko)}</span> &nbsp; ${escHtml(titulo)}</h1>
+  <p class="desc">${escHtml(descripcion)}</p>
+  ${subtitulo ? `<p class="desc"><b>${escHtml(subtitulo)}</b></p>` : ""}
+  <p class="sub">${rows.length} registro${rows.length === 1 ? "" : "s"}</p>
+  <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+  <footer>Documento generado por el sistema Papaws.</footer>
+</body></html>`;
+
+  const w = window.open("", "_blank", "width=1000,height=1000");
+  if (!w) return false;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 350);
+  return true;
+}
 
 // ─── Mini table (shared in overlays) ─────────────────────────────────────────
 function MiniTable({ cols, rows }: { cols: ReportCol[]; rows: unknown[] }) {
@@ -283,9 +372,11 @@ export function Reportes() {
   const [vetsList,        setVetsList]         = useState<Veterinario[]>([]);
   const [serviciosList,   setServiciosList]    = useState<Servicio[]>([]);
   const [productosList,   setProductosList]    = useState<Producto[]>([]);
+  const [organizacionesList, setOrganizacionesList] = useState<Organizacion[]>([]);
 
   useEffect(() => { rescatistasApi.list().then(setRescatistasList).catch(() => {}); }, []);
   useEffect(() => { animalesApi.list().then(setAnimalesList).catch(() => {}); }, []);
+  useEffect(() => { organizacionesApi.list().then(setOrganizacionesList).catch(() => {}); }, []);
   useEffect(() => {
     if (!puedeAccederConsultas) return;
     veterinariosApi.list().then(setVetsList).catch(() => {});
@@ -464,6 +555,7 @@ export function Reportes() {
   const oInputOpts = (): SelectOption[] => {
     if (!oReport) return [];
     switch (oReport.inputType) {
+      case "organizacion": return organizacionesList.map((o) => ({ value: o.id, label: `${o.nombre} · ${o.tipo}` }));
       case "rescatista":   return rescatistasList.map((r) => ({ value: r.id, label: `${r.nombreCompleto} · ${r.zonaOperacion}` }));
       case "animal":       return animalesList.map((a) => ({ value: a.id, label: `${a.nombre} (${a.especie})` }));
       case "veterinario":  return vetsList.map((v) => ({ value: v.id, label: `${v.nombreCompleto} · ${v.especialidadPrincipal}` }));
@@ -739,7 +831,24 @@ export function Reportes() {
                   <p className="font-display text-lg text-moss-800 leading-tight">{oReport.label}</p>
                   <p className="text-xs text-ink-400 truncate">{oReport.desc}</p>
                 </div>
-                <button onClick={closeOverlay} className="ml-auto shrink-0 w-8 h-8 rounded-lg hover:bg-moss-50 flex items-center justify-center text-ink-400 hover:text-clay-500 transition-colors">
+                {oRows.length > 0 && (
+                  <button
+                    onClick={() =>
+                      exportarReportePdf(
+                        oReport.label,
+                        oReport.chebotko,
+                        oReport.desc,
+                        oHeader ? [oHeader.title, oHeader.sub].filter(Boolean).join(" · ") : null,
+                        oReport.cols,
+                        oRows
+                      )
+                    }
+                    className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 h-8 text-xs font-semibold text-moss-700 hover:bg-moss-50 transition-colors"
+                  >
+                    <FileDown size={14} /> PDF
+                  </button>
+                )}
+                <button onClick={closeOverlay} className={`${oRows.length > 0 ? "" : "ml-auto"} shrink-0 w-8 h-8 rounded-lg hover:bg-moss-50 flex items-center justify-center text-ink-400 hover:text-clay-500 transition-colors`}>
                   <X size={16} />
                 </button>
               </div>

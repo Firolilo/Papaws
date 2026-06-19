@@ -100,7 +100,7 @@ public class ConsultasController : ControllerBase
     [HttpPut("{codigo}/diagnostico")]
     public async Task<IActionResult> RegistrarDiagnostico(string codigo, [FromBody] RegistrarDiagnosticoDto dto)
     {
-        var actualizado = await _consultaService.RegistrarDiagnosticoAsync(codigo, dto.Diagnostico, dto.IndicacionesSeguimiento);
+        var actualizado = await _consultaService.RegistrarDiagnosticoAsync(codigo, dto);
         if (!actualizado)
             return NotFound(new { mensaje = "Consulta no encontrada." });
 

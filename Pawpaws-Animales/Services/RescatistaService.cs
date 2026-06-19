@@ -7,19 +7,21 @@ namespace Pawpaws.Animales.Services;
 public class RescatistaService : IRescatistaService
 {
     private readonly Cassandra.ISession _session;
+    private readonly IOrganizacionService _organizacionService;
     private readonly PreparedStatement _insertStatement;
     private readonly PreparedStatement _selectAllStatement;
     private readonly PreparedStatement _selectByIdStatement;
     private readonly PreparedStatement _updateStatement;
     private readonly PreparedStatement _softDeleteStatement;
 
-    public RescatistaService(Cassandra.ISession session)
+    public RescatistaService(Cassandra.ISession session, IOrganizacionService organizacionService)
     {
         _session = session;
-        _insertStatement = _session.Prepare("INSERT INTO rescatistas_by_id (id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        _selectAllStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto FROM rescatistas_by_id");
-        _selectByIdStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, zona_operacion, activo, oculto FROM rescatistas_by_id WHERE id = ?");
-        _updateStatement = _session.Prepare("UPDATE rescatistas_by_id SET nombre_completo = ?, telefono_contacto = ?, correo_electronico = ?, organizacion = ?, zona_operacion = ? WHERE id = ?");
+        _organizacionService = organizacionService;
+        _insertStatement = _session.Prepare("INSERT INTO rescatistas_by_id (id, nombre_completo, telefono_contacto, correo_electronico, organizacion, organizacion_id, zona_operacion, activo, oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        _selectAllStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, organizacion_id, zona_operacion, activo, oculto FROM rescatistas_by_id");
+        _selectByIdStatement = _session.Prepare("SELECT id, nombre_completo, telefono_contacto, correo_electronico, organizacion, organizacion_id, zona_operacion, activo, oculto FROM rescatistas_by_id WHERE id = ?");
+        _updateStatement = _session.Prepare("UPDATE rescatistas_by_id SET nombre_completo = ?, telefono_contacto = ?, correo_electronico = ?, organizacion = ?, organizacion_id = ?, zona_operacion = ? WHERE id = ?");
         _softDeleteStatement = _session.Prepare("UPDATE rescatistas_by_id SET activo = false WHERE id = ?");
     }
 
@@ -40,13 +42,16 @@ public class RescatistaService : IRescatistaService
 
     public async Task<Rescatista> CrearAsync(CrearRescatistaDto dto)
     {
+        var organizacion = await ResolverOrganizacionAsync(dto.OrganizacionId);
+
         var rescatista = new Rescatista
         {
             Id = Guid.NewGuid(),
             NombreCompleto = dto.NombreCompleto,
             TelefonoContacto = dto.TelefonoContacto,
             CorreoElectronico = dto.CorreoElectronico,
-            Organizacion = dto.Organizacion,
+            Organizacion = organizacion.Nombre,
+            OrganizacionId = organizacion.Id,
             ZonaOperacion = dto.ZonaOperacion,
             Activo = true,
             Oculto = false
@@ -58,6 +63,7 @@ public class RescatistaService : IRescatistaService
             rescatista.TelefonoContacto,
             rescatista.CorreoElectronico,
             rescatista.Organizacion,
+            rescatista.OrganizacionId,
             rescatista.ZonaOperacion,
             rescatista.Activo,
             rescatista.Oculto));
@@ -73,11 +79,14 @@ public class RescatistaService : IRescatistaService
             return false;
         }
 
+        var organizacion = await ResolverOrganizacionAsync(dto.OrganizacionId);
+
         await _session.ExecuteAsync(_updateStatement.Bind(
             dto.NombreCompleto,
             dto.TelefonoContacto,
             dto.CorreoElectronico,
-            dto.Organizacion,
+            organizacion.Nombre,
+            organizacion.Id,
             dto.ZonaOperacion,
             id));
 
@@ -102,6 +111,23 @@ public class RescatistaService : IRescatistaService
         return true;
     }
 
+    // Valida que la organización exista y esté activa, y devuelve su id + nombre (snapshot).
+    private async Task<(Guid? Id, string Nombre)> ResolverOrganizacionAsync(Guid? organizacionId)
+    {
+        if (organizacionId is null || organizacionId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Debe seleccionar una organización para el rescatista.");
+        }
+
+        var organizacion = await _organizacionService.ObtenerPorIdAsync(organizacionId.Value);
+        if (organizacion is null || !organizacion.Activo)
+        {
+            throw new InvalidOperationException("La organización seleccionada no existe o está dada de baja.");
+        }
+
+        return (organizacion.Id, organizacion.Nombre);
+    }
+
     private static Rescatista MapearRescatista(Row row)
     {
         return new Rescatista
@@ -111,6 +137,7 @@ public class RescatistaService : IRescatistaService
             TelefonoContacto = row.GetValue<string>("telefono_contacto"),
             CorreoElectronico = row.GetValue<string>("correo_electronico"),
             Organizacion = row.GetValue<string>("organizacion"),
+            OrganizacionId = row.IsNull("organizacion_id") ? null : row.GetValue<Guid>("organizacion_id"),
             ZonaOperacion = row.GetValue<string>("zona_operacion"),
             // Filas previas a la migración no tienen 'activo' → se consideran activas.
             Activo = row.IsNull("activo") || row.GetValue<bool>("activo"),

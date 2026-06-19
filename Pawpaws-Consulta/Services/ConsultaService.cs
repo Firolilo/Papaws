@@ -52,12 +52,12 @@ public class ConsultaService : IConsultaService
         _servicioService = servicioService;
         _productoService = productoService;
         _insertConsultaStatement = _session.Prepare("INSERT INTO consultas_by_codigo (codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS");
-        _selectAllStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id FROM consultas_by_codigo");
-        _selectByCodigoStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, animal_id, veterinario_id FROM consultas_by_codigo WHERE codigo = ?");
+        _selectAllStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, tratamiento, amerita_tratamiento, proximo_control, peso, temperatura, condicion_corporal, animal_id, veterinario_id FROM consultas_by_codigo");
+        _selectByCodigoStatement = _session.Prepare("SELECT codigo, fecha_hora, estado, observaciones, diagnostico, indicaciones_seguimiento, tratamiento, amerita_tratamiento, proximo_control, peso, temperatura, condicion_corporal, animal_id, veterinario_id FROM consultas_by_codigo WHERE codigo = ?");
         _insertConsultaServicioStatement = _session.Prepare("INSERT INTO consulta_servicios_by_codigo (codigo, servicio_id) VALUES (?, ?)");
         _selectConsultaServiciosStatement = _session.Prepare("SELECT servicio_id FROM consulta_servicios_by_codigo WHERE codigo = ?");
         _deleteConsultaServiciosStatement = _session.Prepare("DELETE FROM consulta_servicios_by_codigo WHERE codigo = ?");
-        _updateDiagnosticoStatement = _session.Prepare("UPDATE consultas_by_codigo SET diagnostico = ?, indicaciones_seguimiento = ?, estado = ? WHERE codigo = ?");
+        _updateDiagnosticoStatement = _session.Prepare("UPDATE consultas_by_codigo SET diagnostico = ?, indicaciones_seguimiento = ?, estado = ?, tratamiento = ?, amerita_tratamiento = ?, proximo_control = ?, peso = ?, temperatura = ?, condicion_corporal = ? WHERE codigo = ?");
         _updateEstadoStatement = _session.Prepare("UPDATE consultas_by_codigo SET estado = ? WHERE codigo = ?");
         _updateFechaHoraStatement = _session.Prepare("UPDATE consultas_by_codigo SET fecha_hora = ? WHERE codigo = ?");
         _updateObservacionesStatement = _session.Prepare("UPDATE consultas_by_codigo SET observaciones = ? WHERE codigo = ?");
@@ -131,6 +131,14 @@ public class ConsultaService : IConsultaService
         if (!EstadosValidos.Contains(dto.Estado))
         {
             throw new InvalidOperationException($"Estado inválido. Debe ser uno de: {string.Join(", ", EstadosValidos)}.");
+        }
+
+        // Una consulta recién agendada solo puede nacer Pendiente o Confirmada: "Completada"
+        // exige diagnóstico/productos (se registran después) y "Cancelada" no tiene sentido al crear.
+        if (!dto.Estado.Equals("Pendiente", StringComparison.OrdinalIgnoreCase) &&
+            !dto.Estado.Equals("Confirmada", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Una consulta nueva solo puede crearse como Pendiente o Confirmada. Para completarla, registrá el diagnóstico una vez atendida.");
         }
 
         if (!await _animalReferenceService.ExisteAnimalAsync(dto.AnimalId))
@@ -275,7 +283,7 @@ public class ConsultaService : IConsultaService
         return true;
     }
 
-    public async Task<bool> RegistrarDiagnosticoAsync(string codigo, string diagnostico, string indicacionesSeguimiento)
+    public async Task<bool> RegistrarDiagnosticoAsync(string codigo, RegistrarDiagnosticoDto dto)
     {
         var consulta = await ObtenerPorCodigoAsync(codigo);
         if (consulta is null)
@@ -288,7 +296,22 @@ public class ConsultaService : IConsultaService
             throw new InvalidOperationException("No se puede registrar diagnóstico en una consulta cancelada.");
         }
 
-        await _session.ExecuteAsync(_updateDiagnosticoStatement.Bind(diagnostico, indicacionesSeguimiento, "Completada", codigo));
+        if (dto.Peso is <= 0)
+        {
+            throw new InvalidOperationException("El peso debe ser mayor a cero.");
+        }
+
+        await _session.ExecuteAsync(_updateDiagnosticoStatement.Bind(
+            dto.Diagnostico,
+            dto.IndicacionesSeguimiento,
+            "Completada",
+            dto.Tratamiento,
+            dto.AmeritaTratamiento,
+            dto.ProximoControl,
+            dto.Peso,
+            dto.Temperatura,
+            dto.CondicionCorporal,
+            codigo));
         return true;
     }
 
@@ -447,6 +470,12 @@ public class ConsultaService : IConsultaService
             Observaciones = row.GetValue<string>("observaciones"),
             Diagnostico = row.IsNull("diagnostico") ? null : row.GetValue<string>("diagnostico"),
             IndicacionesSeguimiento = row.IsNull("indicaciones_seguimiento") ? null : row.GetValue<string>("indicaciones_seguimiento"),
+            Tratamiento = row.IsNull("tratamiento") ? null : row.GetValue<string>("tratamiento"),
+            AmeritaTratamiento = row.IsNull("amerita_tratamiento") ? null : row.GetValue<bool>("amerita_tratamiento"),
+            ProximoControl = row.IsNull("proximo_control") ? null : row.GetValue<DateTime>("proximo_control"),
+            Peso = row.IsNull("peso") ? null : row.GetValue<decimal>("peso"),
+            Temperatura = row.IsNull("temperatura") ? null : row.GetValue<decimal>("temperatura"),
+            CondicionCorporal = row.IsNull("condicion_corporal") ? null : row.GetValue<string>("condicion_corporal"),
             AnimalId = row.GetValue<Guid>("animal_id"),
             VeterinarioId = row.GetValue<Guid>("veterinario_id")
         };

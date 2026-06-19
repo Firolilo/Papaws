@@ -16,7 +16,7 @@ public interface IConsultaService
     Task<bool> ReprogramarAsync(string codigo, DateTime nuevaFechaHora);
     Task<bool> ActualizarObservacionesAsync(string codigo, string observaciones);
 
-    Task<bool> RegistrarDiagnosticoAsync(string codigo, string diagnostico, string indicacionesSeguimiento);
+    Task<bool> RegistrarDiagnosticoAsync(string codigo, RegistrarDiagnosticoDto dto);
     Task<bool> RegistrarProductosAsync(string codigo, List<ProductoUsadoDto> productosUsados);
     Task<List<ProductoUsadoDto>> ObtenerProductosUsadosAsync(string codigo);
 

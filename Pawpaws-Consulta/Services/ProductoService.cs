@@ -49,6 +49,8 @@ public class ProductoService : IProductoService
 
     public async Task<Producto> CrearAsync(CrearProductoDto dto)
     {
+        await GarantizarNombreUnicoAsync(dto.Nombre, null);
+
         var producto = new Producto
         {
             Id = Guid.NewGuid(),
@@ -63,6 +65,20 @@ public class ProductoService : IProductoService
         return producto;
     }
 
+    // Rechaza nombres repetidos entre productos activos (case-insensitive). Evita los duplicados
+    // "a mano" que el seed ya no genera. No considera los dados de baja: su nombre puede reutilizarse.
+    private async Task GarantizarNombreUnicoAsync(string nombre, Guid? excluyendoId)
+    {
+        var activos = await ObtenerTodosAsync();
+        var colision = activos.Any(p =>
+            p.Id != excluyendoId &&
+            p.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase));
+        if (colision)
+        {
+            throw new ConflictoException($"Ya existe un producto activo llamado '{nombre}'.");
+        }
+    }
+
     public async Task<bool> ActualizarAsync(Guid id, ActualizarProductoDto dto)
     {
         var actual = await ObtenerPorIdAsync(id);
@@ -70,6 +86,8 @@ public class ProductoService : IProductoService
         {
             return false;
         }
+
+        await GarantizarNombreUnicoAsync(dto.Nombre, id);
 
         // Solo datos descriptivos: el stock se gestiona por endpoints dedicados.
         await _session.ExecuteAsync(_updateStatement.Bind(dto.Nombre, dto.Tipo, dto.UnidadMedida, id));

@@ -71,6 +71,7 @@ public class ReporteService : IReporteService
         if (animal is null) return null;
 
         var consultas = await _consulta.GetConsultasByAnimalAsync(animalId);
+        var vetNombres = await ResolverNombresVetAsync(consultas.Select(c => c.VeterinarioId));
         return new ConsultasPorAnimalDto
         {
             IdAnimal = animal.Id,
@@ -83,6 +84,7 @@ public class ReporteService : IReporteService
                     FechaCita = c.FechaHora,
                     CodConsulta = c.Codigo,
                     IdVeterinario = c.VeterinarioId,
+                    NombreVeterinario = vetNombres[c.VeterinarioId],
                     Estado = c.Estado,
                     Observaciones = c.Observaciones
                 }).ToList()
@@ -106,6 +108,7 @@ public class ReporteService : IReporteService
                     FechaCita = c.FechaHora,
                     CodConsulta = c.Codigo,
                     IdVeterinario = c.VeterinarioId,
+                    NombreVeterinario = veterinario.NombreCompleto,
                     Estado = c.Estado,
                     Observaciones = c.Observaciones
                 }).ToList()
@@ -116,13 +119,17 @@ public class ReporteService : IReporteService
     {
         var c = await _consulta.GetConsultaByCodigoAsync(codigo);
         if (c is null) return null;
+        var vetNombres = await ResolverNombresVetAsync(new[] { c.VeterinarioId });
+        var animalNombres = await ResolverNombresAnimalAsync(new[] { c.AnimalId });
         return new DetalleConsultaDto
         {
             CodConsulta = c.Codigo,
             FechaCita = c.FechaHora,
             Estado = c.Estado,
             IdAnimal = c.AnimalId,
+            NombreAnimal = animalNombres[c.AnimalId],
             IdVeterinario = c.VeterinarioId,
+            NombreVeterinario = vetNombres[c.VeterinarioId],
             ServicioIds = c.ServicioIds,
             Observaciones = c.Observaciones,
             Diagnostico = c.Diagnostico,
@@ -133,15 +140,19 @@ public class ReporteService : IReporteService
     public async Task<List<ConsultaPorEstadoDto>> C7_ConsultasPorEstadoAsync(string estado)
     {
         var todas = await _consulta.GetConsultasAsync();
-        return todas
+        var filtradas = todas
             .Where(c => c.Estado.Equals(estado, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(c => c.FechaHora)
+            .ToList();
+        var animalNombres = await ResolverNombresAnimalAsync(filtradas.Select(c => c.AnimalId));
+        return filtradas
             .Select(c => new ConsultaPorEstadoDto
             {
                 Estado = c.Estado,
                 FechaCita = c.FechaHora,
                 CodReserva = c.Codigo,
-                IdAnimal = c.AnimalId
+                IdAnimal = c.AnimalId,
+                NombreAnimal = animalNombres[c.AnimalId]
             }).ToList();
     }
 
@@ -260,29 +271,39 @@ public class ReporteService : IReporteService
     {
         var c = await _consulta.GetConsultaByCodigoAsync(codigo);
         if (c is null) return null;
+        var vetNombres = await ResolverNombresVetAsync(new[] { c.VeterinarioId });
+        var animalNombres = await ResolverNombresAnimalAsync(new[] { c.AnimalId });
         return new ConsultaPorCodigoDto
         {
             CodConsulta = c.Codigo,
             FechaCita = c.FechaHora,
             Estado = c.Estado,
             IdAnimal = c.AnimalId,
-            IdVeterinario = c.VeterinarioId
+            NombreAnimal = animalNombres[c.AnimalId],
+            IdVeterinario = c.VeterinarioId,
+            NombreVeterinario = vetNombres[c.VeterinarioId]
         };
     }
 
     public async Task<List<ConsultaPorFechaDto>> C16_ConsultasPorFechaAsync(DateOnly fecha)
     {
         var todas = await _consulta.GetConsultasAsync();
-        return todas
+        var delDia = todas
             .Where(c => DateOnly.FromDateTime(c.FechaHora) == fecha)
             .OrderByDescending(c => c.FechaHora)
+            .ToList();
+        var animalNombres = await ResolverNombresAnimalAsync(delDia.Select(c => c.AnimalId));
+        var vetNombres = await ResolverNombresVetAsync(delDia.Select(c => c.VeterinarioId));
+        return delDia
             .Select(c => new ConsultaPorFechaDto
             {
                 FechaCita = c.FechaHora,
                 CodConsulta = c.Codigo,
                 Estado = c.Estado,
                 IdAnimal = c.AnimalId,
-                IdVeterinario = c.VeterinarioId
+                NombreAnimal = animalNombres[c.AnimalId],
+                IdVeterinario = c.VeterinarioId,
+                NombreVeterinario = vetNombres[c.VeterinarioId]
             }).ToList();
     }
 
@@ -315,5 +336,93 @@ public class ReporteService : IReporteService
                 Telefono = r.TelefonoContacto,
                 Email = r.CorreoElectronico
             }).ToList();
+    }
+
+    public async Task<OrganizacionDetalleDto?> C20_OrganizacionDetalleAsync(Guid organizacionId)
+    {
+        var organizacion = await _animales.GetOrganizacionByIdAsync(organizacionId);
+        if (organizacion is null) return null;
+
+        var rescatistas = (await _animales.GetRescatistasAsync())
+            .Where(r => r.OrganizacionId == organizacionId)
+            .OrderBy(r => r.NombreCompleto)
+            .ToList();
+
+        var filas = new List<FilaOrganizacionDto>();
+        var totalAnimales = 0;
+        foreach (var r in rescatistas)
+        {
+            var animales = (await _animales.GetAnimalesByRescatistaAsync(r.Id))
+                .OrderBy(a => a.Nombre)
+                .ToList();
+            totalAnimales += animales.Count;
+
+            if (animales.Count == 0)
+            {
+                // El rescatista pertenece a la organización aunque todavía no tenga animales.
+                filas.Add(new FilaOrganizacionDto { NombreRescatista = r.NombreCompleto });
+                continue;
+            }
+            foreach (var a in animales)
+            {
+                filas.Add(new FilaOrganizacionDto
+                {
+                    NombreRescatista = r.NombreCompleto,
+                    NombreAnimal = a.Nombre,
+                    Especie = a.Especie,
+                    FechaIngreso = a.FechaIngreso
+                });
+            }
+        }
+
+        return new OrganizacionDetalleDto
+        {
+            IdOrganizacion = organizacion.Id,
+            NombreOrganizacion = organizacion.Nombre,
+            Tipo = organizacion.Tipo,
+            TotalRescatistas = rescatistas.Count,
+            TotalAnimales = totalAnimales,
+            Filas = filas
+        };
+    }
+
+    // ── Resolución de nombres a prueba de huérfanos ────────────────────────────
+    // Los reportes muestran nombres, no IDs crudos. Si una consulta referencia un veterinario
+    // dado de baja, se resuelve su nombre (el endpoint por-id devuelve inactivos) y se marca
+    // "(dado de baja)"; si la referencia ya no existe, se muestra "(eliminado)" en vez de un
+    // campo en blanco o un GUID sin sentido.
+
+    private async Task<Dictionary<Guid, string>> ResolverNombresVetAsync(IEnumerable<Guid> ids)
+    {
+        var activos = (await _consulta.GetVeterinariosAsync())
+            .ToDictionary(v => v.Id, v => v.NombreCompleto);
+
+        var resultado = new Dictionary<Guid, string>();
+        foreach (var id in ids.Distinct())
+        {
+            if (activos.TryGetValue(id, out var nombre))
+            {
+                resultado[id] = nombre;
+                continue;
+            }
+            // No está entre los activos: puede estar dado de baja (resoluble por-id) o eliminado.
+            var vet = await _consulta.GetVeterinarioByIdAsync(id);
+            resultado[id] = vet is not null ? $"{vet.NombreCompleto} (dado de baja)" : "(eliminado)";
+        }
+        return resultado;
+    }
+
+    private async Task<Dictionary<Guid, string>> ResolverNombresAnimalAsync(IEnumerable<Guid> ids)
+    {
+        var existentes = (await _animales.GetAnimalesAsync())
+            .ToDictionary(a => a.Id, a => a.Nombre);
+
+        var resultado = new Dictionary<Guid, string>();
+        foreach (var id in ids.Distinct())
+        {
+            // Los animales se borran físicamente: si no está en el listado, ya no existe.
+            resultado[id] = existentes.TryGetValue(id, out var nombre) ? nombre : "(eliminado)";
+        }
+        return resultado;
     }
 }

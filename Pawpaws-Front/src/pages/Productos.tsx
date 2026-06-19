@@ -230,6 +230,8 @@ export function Productos() {
           <Input
             label="Nombre"
             required
+            minLength={2}
+            maxLength={120}
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
@@ -238,6 +240,7 @@ export function Productos() {
               label="Tipo"
               placeholder="Medicamento, insumo…"
               required
+              maxLength={80}
               value={form.tipo}
               onChange={(e) => setForm({ ...form, tipo: e.target.value })}
             />
@@ -245,6 +248,7 @@ export function Productos() {
               label="Unidad"
               placeholder="ml, unidades, g…"
               required
+              maxLength={40}
               value={form.unidadMedida}
               onChange={(e) =>
                 setForm({ ...form, unidadMedida: e.target.value })
@@ -256,6 +260,8 @@ export function Productos() {
               label="Stock disponible"
               type="number"
               min="0"
+              max="1000000"
+              step="1"
               required
               value={form.stockDisponible || ""}
               onChange={(e) =>
@@ -301,6 +307,8 @@ export function Productos() {
             hint={stockTarget?.unidadMedida}
             type="number"
             min="0"
+            max="1000000"
+            step="1"
             required
             autoFocus
             value={stockValue}

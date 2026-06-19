@@ -7,4 +7,5 @@ public class ConsultaPorEstadoDto
     public DateTime FechaCita { get; set; }
     public string CodReserva { get; set; } = string.Empty;
     public Guid IdAnimal { get; set; }
+    public string NombreAnimal { get; set; } = string.Empty;
 }

@@ -6,4 +6,7 @@ public sealed record AnimalResponseDto(
     string Especie,
     decimal PesoActual,
     DateTime FechaIngreso,
-    Guid RescatistaId);
+    Guid RescatistaId,
+    string Estado,
+    DateTime? FechaSalida,
+    Guid? AdoptanteRescatistaId);

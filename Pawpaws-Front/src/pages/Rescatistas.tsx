@@ -9,14 +9,14 @@ import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
-import { animalesApi, rescatistasApi } from "../api/endpoints";
+import { animalesApi, organizacionesApi, rescatistasApi } from "../api/endpoints";
 import type { Animal, CrearRescatistaDto, Rescatista } from "../types";
 
 const emptyForm: CrearRescatistaDto = {
   nombreCompleto: "",
   telefonoContacto: "",
   correoElectronico: "",
-  organizacion: "",
+  organizacionId: "",
   zonaOperacion: "",
 };
 
@@ -25,6 +25,16 @@ export function Rescatistas() {
   const toast = useToast();
   const { data, error, loading, reload } = useFetch(() =>
     rescatistasApi.list()
+  );
+  const organizaciones = useFetch(() => organizacionesApi.list());
+  const organizacionOptions = useMemo(
+    () =>
+      (organizaciones.data ?? []).map((o) => ({
+        value: o.id,
+        label: o.nombre,
+        hint: o.tipo,
+      })),
+    [organizaciones.data]
   );
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Rescatista | null>(null);
@@ -98,7 +108,7 @@ export function Rescatistas() {
       nombreCompleto: r.nombreCompleto,
       telefonoContacto: r.telefonoContacto,
       correoElectronico: r.correoElectronico,
-      organizacion: r.organizacion,
+      organizacionId: r.organizacionId ?? "",
       zonaOperacion: r.zonaOperacion,
     });
     setSubmitError(null);
@@ -107,6 +117,10 @@ export function Rescatistas() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.organizacionId) {
+      setSubmitError("Selecciona una organización.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -223,6 +237,8 @@ export function Rescatistas() {
           <Input
             label="Nombre completo"
             required
+            minLength={2}
+            maxLength={120}
             value={form.nombreCompleto}
             onChange={(e) =>
               setForm({ ...form, nombreCompleto: e.target.value })
@@ -231,7 +247,13 @@ export function Rescatistas() {
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Teléfono"
+              type="tel"
               required
+              minLength={6}
+              maxLength={30}
+              pattern="[0-9+\-\s()]{6,30}"
+              title="Solo dígitos, espacios y los signos + - ( )"
+              placeholder="555-1001"
               value={form.telefonoContacto}
               onChange={(e) =>
                 setForm({ ...form, telefonoContacto: e.target.value })
@@ -241,22 +263,27 @@ export function Rescatistas() {
               label="Correo"
               type="email"
               required
+              maxLength={120}
+              placeholder="nombre@correo.com"
               value={form.correoElectronico}
               onChange={(e) =>
                 setForm({ ...form, correoElectronico: e.target.value })
               }
             />
           </div>
-          <Input
+          <Combobox
             label="Organización"
-            required
-            placeholder="ONG, autoridad ambiental, independiente…"
-            value={form.organizacion}
-            onChange={(e) => setForm({ ...form, organizacion: e.target.value })}
+            value={form.organizacionId}
+            onChange={(v) => setForm({ ...form, organizacionId: v })}
+            options={organizacionOptions}
+            placeholder="Selecciona una organización…"
+            searchPlaceholder="Buscar organización…"
+            emptyText="No hay organizaciones. Creá una primero."
           />
           <Input
             label="Zona de operación"
             required
+            maxLength={120}
             value={form.zonaOperacion}
             onChange={(e) => setForm({ ...form, zonaOperacion: e.target.value })}
           />

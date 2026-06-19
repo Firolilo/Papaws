@@ -150,6 +150,8 @@ export function Veterinarios() {
           <Input
             label="Nombre completo"
             required
+            minLength={2}
+            maxLength={120}
             value={form.nombreCompleto}
             onChange={(e) =>
               setForm({ ...form, nombreCompleto: e.target.value })
@@ -157,7 +159,13 @@ export function Veterinarios() {
           />
           <Input
             label="Teléfono"
+            type="tel"
             required
+            minLength={6}
+            maxLength={30}
+            pattern="[0-9+\-\s()]{6,30}"
+            title="Solo dígitos, espacios y los signos + - ( )"
+            placeholder="555-2001"
             value={form.telefonoContacto}
             onChange={(e) =>
               setForm({ ...form, telefonoContacto: e.target.value })
@@ -167,6 +175,8 @@ export function Veterinarios() {
             label="Especialidad principal"
             placeholder="Cirugía, Dermatología, Medicina general…"
             required
+            minLength={2}
+            maxLength={120}
             value={form.especialidadPrincipal}
             onChange={(e) =>
               setForm({ ...form, especialidadPrincipal: e.target.value })

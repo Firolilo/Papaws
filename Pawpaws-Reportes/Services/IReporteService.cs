@@ -57,4 +57,7 @@ public interface IReporteService
 
     // C19: Rescatista_por_zona
     Task<List<RescatistaPorZonaDto>> C19_RescatistasPorZonaAsync(string zona);
+
+    // C20: Organización → rescatistas → animales
+    Task<OrganizacionDetalleDto?> C20_OrganizacionDetalleAsync(Guid organizacionId);
 }

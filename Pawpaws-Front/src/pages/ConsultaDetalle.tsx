@@ -55,10 +55,16 @@ export function ConsultaDetalle() {
   const servicios = useFetch(() => serviciosApi.list());
   const productos = useFetch(() => productosApi.list());
 
-  // Diagnóstico
+  // Diagnóstico + tratamiento + signos clínicos
   const [diag, setDiag] = useState({
     diagnostico: "",
     indicacionesSeguimiento: "",
+    tratamiento: "",
+    ameritaTratamiento: false,
+    proximoControl: "",
+    peso: "",
+    temperatura: "",
+    condicionCorporal: "",
   });
   const [diagSaving, setDiagSaving] = useState(false);
   const [diagError, setDiagError] = useState<string | null>(null);
@@ -131,6 +137,13 @@ export function ConsultaDetalle() {
     return (servicios.data ?? []).filter((s) => ids.has(s.id));
   }, [servicios.data, consulta.data]);
 
+  // Costo de la consulta = suma de los precios base de sus servicios (los productos no
+  // tienen precio en el modelo, solo afectan stock).
+  const costoTotal = useMemo(
+    () => serviciosAsignados.reduce((acc, s) => acc + Number(s.precioBase || 0), 0),
+    [serviciosAsignados]
+  );
+
   const productosById = useMemo(
     () => Object.fromEntries((productos.data ?? []).map((p) => [p.id, p])),
     [productos.data]
@@ -149,10 +162,30 @@ export function ConsultaDetalle() {
     setDiagSaving(true);
     setDiagError(null);
     try {
-      await consultasApi.registrarDiagnostico(decoded, diag);
+      await consultasApi.registrarDiagnostico(decoded, {
+        diagnostico: diag.diagnostico,
+        indicacionesSeguimiento: diag.indicacionesSeguimiento,
+        tratamiento: diag.tratamiento || null,
+        ameritaTratamiento: diag.ameritaTratamiento,
+        proximoControl: diag.proximoControl
+          ? new Date(diag.proximoControl).toISOString()
+          : null,
+        peso: diag.peso ? parseFloat(diag.peso) : null,
+        temperatura: diag.temperatura ? parseFloat(diag.temperatura) : null,
+        condicionCorporal: diag.condicionCorporal || null,
+      });
       toast.success("Diagnóstico registrado. La consulta quedó completada.");
       consulta.reload();
-      setDiag({ diagnostico: "", indicacionesSeguimiento: "" });
+      setDiag({
+        diagnostico: "",
+        indicacionesSeguimiento: "",
+        tratamiento: "",
+        ameritaTratamiento: false,
+        proximoControl: "",
+        peso: "",
+        temperatura: "",
+        condicionCorporal: "",
+      });
     } catch (err: any) {
       setDiagError(err.message);
     } finally {
@@ -406,6 +439,7 @@ export function ConsultaDetalle() {
                     <Textarea
                       value={obsForm}
                       rows={4}
+                      maxLength={500}
                       onChange={(e) => setObsForm(e.target.value)}
                     />
                     {obsError && <ErrorBox message={obsError} />}
@@ -469,6 +503,45 @@ export function ConsultaDetalle() {
                         </p>
                       </div>
                     )}
+                    {consulta.data.tratamiento && (
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-clay-500 font-bold mb-1">
+                          Tratamiento
+                        </p>
+                        <p className="text-ink-700 leading-relaxed">
+                          {consulta.data.tratamiento}
+                        </p>
+                      </div>
+                    )}
+                    {(consulta.data.peso != null ||
+                      consulta.data.temperatura != null ||
+                      consulta.data.condicionCorporal ||
+                      consulta.data.ameritaTratamiento != null ||
+                      consulta.data.proximoControl) && (
+                      <div className="flex flex-wrap gap-2">
+                        {consulta.data.peso != null && (
+                          <SignoChip label="Peso" value={`${consulta.data.peso} kg`} />
+                        )}
+                        {consulta.data.temperatura != null && (
+                          <SignoChip label="Temp." value={`${consulta.data.temperatura} °C`} />
+                        )}
+                        {consulta.data.condicionCorporal && (
+                          <SignoChip label="Condición" value={consulta.data.condicionCorporal} />
+                        )}
+                        {consulta.data.ameritaTratamiento != null && (
+                          <SignoChip
+                            label="Tratamiento"
+                            value={consulta.data.ameritaTratamiento ? "Amerita" : "No amerita"}
+                          />
+                        )}
+                        {consulta.data.proximoControl && (
+                          <SignoChip
+                            label="Próximo control"
+                            value={new Date(consulta.data.proximoControl).toLocaleDateString("es")}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-ink-500 mb-4">
@@ -489,6 +562,7 @@ export function ConsultaDetalle() {
                     <Textarea
                       label="Diagnóstico"
                       required
+                      maxLength={500}
                       value={diag.diagnostico}
                       onChange={(e) =>
                         setDiag({ ...diag, diagnostico: e.target.value })
@@ -497,6 +571,7 @@ export function ConsultaDetalle() {
                     <Textarea
                       label="Indicaciones de seguimiento"
                       required
+                      maxLength={500}
                       value={diag.indicacionesSeguimiento}
                       onChange={(e) =>
                         setDiag({
@@ -505,6 +580,82 @@ export function ConsultaDetalle() {
                         })
                       }
                     />
+                    <Textarea
+                      label="Tratamiento"
+                      maxLength={500}
+                      placeholder="Medicación, procedimiento, dosis…"
+                      value={diag.tratamiento}
+                      onChange={(e) =>
+                        setDiag({ ...diag, tratamiento: e.target.value })
+                      }
+                    />
+                    <div className="grid grid-cols-2 gap-3 items-end">
+                      <label className="flex items-center gap-2.5 bg-bone-50 rounded-2xl px-4 py-3 cursor-pointer select-none border-2 border-bone-200">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-moss-600"
+                          checked={diag.ameritaTratamiento}
+                          onChange={(e) =>
+                            setDiag({
+                              ...diag,
+                              ameritaTratamiento: e.target.checked,
+                            })
+                          }
+                        />
+                        <span className="text-sm font-medium text-ink-700">
+                          Amerita tratamiento
+                        </span>
+                      </label>
+                      <Input
+                        label="Próximo control"
+                        type="date"
+                        value={diag.proximoControl}
+                        onChange={(e) =>
+                          setDiag({ ...diag, proximoControl: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Input
+                        label="Peso"
+                        hint="kg"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max="1000"
+                        placeholder="—"
+                        value={diag.peso}
+                        onChange={(e) =>
+                          setDiag({ ...diag, peso: e.target.value })
+                        }
+                      />
+                      <Input
+                        label="Temp."
+                        hint="°C"
+                        type="number"
+                        step="0.1"
+                        min="20"
+                        max="50"
+                        placeholder="—"
+                        value={diag.temperatura}
+                        onChange={(e) =>
+                          setDiag({ ...diag, temperatura: e.target.value })
+                        }
+                      />
+                      <Input
+                        label="Condición"
+                        maxLength={60}
+                        placeholder="Normal…"
+                        value={diag.condicionCorporal}
+                        onChange={(e) =>
+                          setDiag({ ...diag, condicionCorporal: e.target.value })
+                        }
+                      />
+                    </div>
+                    <p className="text-[11px] text-ink-500">
+                      Los signos clínicos son opcionales y alimentan la evolución
+                      del animal en su ficha.
+                    </p>
                     {diagError && <ErrorBox message={diagError} />}
                     <div className="flex justify-end">
                       <Button type="submit" disabled={diagSaving}>
@@ -596,6 +747,8 @@ export function ConsultaDetalle() {
                               hint={prod?.unidadMedida}
                               type="number"
                               min="1"
+                              max="100000"
+                              step="1"
                               required
                               value={p.cantidadUsada || ""}
                               onChange={(e) =>
@@ -724,19 +877,29 @@ export function ConsultaDetalle() {
                 {serviciosAsignados.length === 0 ? (
                   <p className="text-sm text-ink-500">Sin servicios</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {serviciosAsignados.map((s) => (
-                      <li
-                        key={s.id}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-ink-700">{s.nombre}</span>
-                        <span className="text-[11px] font-mono text-ink-500">
-                          {s.duracionEstimadaMinutos}′
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="space-y-2">
+                      {serviciosAsignados.map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex items-baseline justify-between gap-2 text-sm"
+                        >
+                          <span className="text-ink-700">{s.nombre}</span>
+                          <span className="font-mono text-[12.5px] text-ink-500 whitespace-nowrap">
+                            ${Number(s.precioBase).toLocaleString("es")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-3 pt-3 border-t border-moss-100 flex items-baseline justify-between">
+                      <span className="text-[11px] uppercase tracking-wider font-bold text-moss-700">
+                        Total
+                      </span>
+                      <span className="font-display text-xl text-moss-800">
+                        ${costoTotal.toLocaleString("es")}
+                      </span>
+                    </div>
+                  </>
                 )}
               </Card>
             </aside>
@@ -837,6 +1000,7 @@ export function ConsultaDetalle() {
               <Textarea
                 label="Observaciones"
                 required
+                maxLength={500}
                 value={editForm.observaciones}
                 onChange={(e) =>
                   setEditForm({
@@ -890,5 +1054,16 @@ export function ConsultaDetalle() {
         </>
       )}
     </>
+  );
+}
+
+function SignoChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 rounded-full bg-bone-100 px-3 py-1">
+      <span className="text-[10px] uppercase tracking-wider font-bold text-clay-500">
+        {label}
+      </span>
+      <span className="text-[13px] font-semibold text-moss-800">{value}</span>
+    </span>
   );
 }

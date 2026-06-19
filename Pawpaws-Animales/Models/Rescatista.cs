@@ -10,7 +10,9 @@ public class Rescatista
     public string NombreCompleto { get; set; } = string.Empty;
     public string TelefonoContacto { get; set; } = string.Empty;
     public string CorreoElectronico { get; set; } = string.Empty;
+    // Snapshot del nombre de la organización (para mostrar sin resolver). El vínculo real es OrganizacionId.
     public string Organizacion { get; set; } = string.Empty;
+    public Guid? OrganizacionId { get; set; }
     public string ZonaOperacion { get; set; } = string.Empty;
     public bool Activo { get; set; } = true;
     // Oculto: no se ofrece como seleccionable ni se gestiona desde la UI (p. ej. el Refugio).

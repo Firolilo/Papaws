@@ -50,9 +50,23 @@ CREATE TABLE IF NOT EXISTS {keyspace}.consultas_by_codigo (
     observaciones text,
     diagnostico text,
     indicaciones_seguimiento text,
+    tratamiento text,
+    amerita_tratamiento boolean,
+    proximo_control timestamp,
+    peso decimal,
+    temperatura decimal,
+    condicion_corporal text,
     animal_id uuid,
     veterinario_id uuid
 )"));
+
+        // Migración: signos clínicos y tratamiento por consulta (keyspaces antiguos).
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS peso decimal"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS temperatura decimal"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS condicion_corporal text"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS tratamiento text"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS amerita_tratamiento boolean"));
+        await session.ExecuteAsync(new SimpleStatement($"ALTER TABLE {keyspace}.consultas_by_codigo ADD IF NOT EXISTS proximo_control timestamp"));
 
         await session.ExecuteAsync(new SimpleStatement($@"
 CREATE TABLE IF NOT EXISTS {keyspace}.consulta_servicios_by_codigo (

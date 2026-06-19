@@ -9,4 +9,6 @@ public interface IAnimalesClient
     Task<List<AnimalExternoDto>> GetAnimalesByRescatistaAsync(Guid rescatistaId);
     Task<List<RescatistaExternoDto>> GetRescatistasAsync();
     Task<RescatistaExternoDto?> GetRescatistaByIdAsync(Guid id);
+    Task<OrganizacionExternoDto?> GetOrganizacionByIdAsync(Guid id);
+    Task<List<OrganizacionExternoDto>> GetOrganizacionesAsync();
 }

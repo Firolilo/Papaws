@@ -16,6 +16,6 @@ public class CrearProductoDto
     [StringLength(40)]
     public string UnidadMedida { get; set; } = string.Empty;
 
-    [Range(0, int.MaxValue)]
+    [Range(0, 1000000, ErrorMessage = "El stock debe estar entre 0 y 1.000.000.")]
     public int StockDisponible { get; set; }
 }

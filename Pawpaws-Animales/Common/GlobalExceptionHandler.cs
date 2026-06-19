@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Pawpaws.Animales.Exceptions;
 
 namespace Pawpaws.Animales.Common;
 
@@ -16,6 +17,7 @@ public class GlobalExceptionHandler : IExceptionHandler
     {
         var (status, titulo) = exception switch
         {
+            ConflictoException => (StatusCodes.Status409Conflict, exception.Message),
             InvalidOperationException => (StatusCodes.Status400BadRequest, exception.Message),
             _ => (StatusCodes.Status500InternalServerError, "Ocurrió un error inesperado.")
         };

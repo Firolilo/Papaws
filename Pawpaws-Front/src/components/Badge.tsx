@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-type Tone = "moss" | "clay" | "neutral" | "amber" | "red" | "blue" | "sun";
+export type Tone = "moss" | "clay" | "neutral" | "amber" | "red" | "blue" | "sun";
 
 const tones: Record<Tone, string> = {
   moss: "bg-moss-100 text-moss-800 ring-moss-200/70",

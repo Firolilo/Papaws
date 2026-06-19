@@ -153,12 +153,16 @@ export function Servicios() {
           <Input
             label="Nombre"
             required
+            minLength={2}
+            maxLength={120}
             value={form.nombre}
             onChange={(e) => setForm({ ...form, nombre: e.target.value })}
           />
           <Textarea
             label="Descripción"
             required
+            minLength={2}
+            maxLength={300}
             value={form.descripcion}
             onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
           />
@@ -168,6 +172,8 @@ export function Servicios() {
               hint="min"
               type="number"
               min="1"
+              max="1440"
+              step="1"
               required
               value={form.duracionEstimadaMinutos || ""}
               onChange={(e) =>
@@ -181,6 +187,7 @@ export function Servicios() {
               label="Precio base"
               type="number"
               min="0"
+              max="999999"
               step="100"
               required
               value={form.precioBase || ""}
