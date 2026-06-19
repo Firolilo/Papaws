@@ -28,6 +28,9 @@ const C = {
 const SPECIES_PALETTE  = [C.moss700, C.clay500, C.sun400, C.moss500, C.moss300, C.clay300, "#9b2226", "#3f977a", "#ae2012", "#ca6702"];
 const ESTADO_PALETTE: Record<string, string> = { Pendiente: C.sun400, Confirmada: C.moss500, Completada: C.moss700, Cancelada: C.clay500 };
 const RESCATISTA_PAL   = [C.moss700, C.moss500, C.sun400, C.clay300, C.moss300, C.clay500, "#3f977a", "#9b2226"];
+const VENCIMIENTO_PAL: Record<string, string> = { Vencido: C.clay500, "Por vencer": C.sun400, Vigente: C.moss500, "Sin vencimiento": C.ink400 };
+const ANIMAL_ESTADO_LABEL: Record<string, string> = { Disponible: "Disponible", EnTratamiento: "En tratamiento", Adoptado: "Adoptado", Devuelto: "Devuelto" };
+const ANIMAL_ESTADO_PAL: Record<string, string> = { Disponible: C.moss500, "En tratamiento": C.sun400, Adoptado: C.moss700, Devuelto: C.clay500 };
 
 // ─── Overlay base ─────────────────────────────────────────────────────────────
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
@@ -239,6 +242,15 @@ function celdaPdf(col: ReportCol, row: Record<string, unknown>): string {
   return String(v);
 }
 
+// Columnas numéricas que se totalizan en el PDF, con su etiqueta de KPI y formato.
+const COLS_TOTALIZABLES: Record<string, { kpi: string; fmt: (n: number) => string }> = {
+  precioBase:                { kpi: "Costo total",     fmt: (n) => `$${n.toLocaleString("es")}` },
+  costo:                     { kpi: "Costo total",     fmt: (n) => `$${n.toLocaleString("es")}` },
+  stockDisponible:           { kpi: "Stock total",     fmt: (n) => n.toLocaleString("es") },
+  cantidadUsada:             { kpi: "Cantidad total",  fmt: (n) => n.toLocaleString("es") },
+  duracionEstimadaMinutos:   { kpi: "Duración total",  fmt: (n) => `${n.toLocaleString("es")} min` },
+};
+
 function exportarReportePdf(
   titulo: string,
   chebotko: string,
@@ -247,18 +259,47 @@ function exportarReportePdf(
   cols: ReportCol[],
   rows: unknown[]
 ): Promise<void> {
+  // Sumas por columna numérica presente en este reporte.
+  const sumas = new Map<string, number>();
+  for (const c of cols) {
+    if (!(c.key in COLS_TOTALIZABLES)) continue;
+    let suma = 0, hay = false;
+    for (const r of rows) {
+      const v = (r as Record<string, unknown>)[c.key];
+      const n = typeof v === "number" ? v : parseFloat(String(v));
+      if (!isNaN(n)) { suma += n; hay = true; }
+    }
+    if (hay) sumas.set(c.key, suma);
+  }
+
+  // Banda de KPIs: cantidad de registros + cada total numérico.
+  const kpis = [
+    { label: "Registros", valor: String(rows.length) },
+    ...cols
+      .filter((c) => sumas.has(c.key))
+      .map((c) => ({ label: COLS_TOTALIZABLES[c.key].kpi, valor: COLS_TOTALIZABLES[c.key].fmt(sumas.get(c.key)!) })),
+  ];
+
+  // Fila de totales alineada bajo las columnas numéricas.
+  const total = sumas.size > 0
+    ? cols.map((c, i) =>
+        sumas.has(c.key) ? COLS_TOTALIZABLES[c.key].fmt(sumas.get(c.key)!) : i === 0 ? "Total" : "")
+    : undefined;
+
   return descargarPdf({
     tituloDoc: `Reporte ${chebotko}`,
     titulo,
     subtitulo: descripcion,
     etiqueta: subtitulo ?? undefined,
     secciones: [
+      { titulo: "Resumen", tipo: "kpis", items: kpis },
       {
         titulo: `Resultados (${rows.length} registro${rows.length === 1 ? "" : "s"})`,
         tipo: "tabla",
         headers: cols.map((c) => c.label),
         filas: rows.map((r) => cols.map((c) => celdaPdf(c, r as Record<string, unknown>))),
         vacio: "Sin resultados.",
+        total,
       },
     ],
     nombreArchivo: `Reporte ${chebotko} - ${titulo}`,
@@ -390,6 +431,56 @@ export function Reportes() {
         fill: p.stockDisponible <= 5 ? C.clay500 : p.stockDisponible <= 15 ? C.sun400 : C.moss500,
       })),
   [productos.data]);
+
+  // Animales por estado (Disponible / En tratamiento / Adoptado / Devuelto).
+  const animalEstadoPieData = useMemo(() => {
+    const cnt: Record<string, number> = {};
+    (animales.data ?? []).forEach((a) => (cnt[a.estado] = (cnt[a.estado] ?? 0) + 1));
+    const orden = ["Disponible", "EnTratamiento", "Adoptado", "Devuelto"];
+    return orden
+      .filter((e) => cnt[e])
+      .map((e) => ({ name: ANIMAL_ESTADO_LABEL[e] ?? e, value: cnt[e] }));
+  }, [animales.data]);
+
+  // Consultas por mes (últimos 6 meses), para ver la tendencia de actividad clínica.
+  const consultasPorMesData = useMemo(() => {
+    const meses: { clave: string; name: string }[] = [];
+    const hoy = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      meses.push({
+        clave: `${d.getFullYear()}-${d.getMonth()}`,
+        name: d.toLocaleDateString("es", { month: "short" }),
+      });
+    }
+    const cnt: Record<string, number> = {};
+    consultasVigentes.forEach((c) => {
+      const d = new Date(c.fechaHora);
+      cnt[`${d.getFullYear()}-${d.getMonth()}`] = (cnt[`${d.getFullYear()}-${d.getMonth()}`] ?? 0) + 1;
+    });
+    return meses.map((m) => ({ name: m.name, value: cnt[m.clave] ?? 0 }));
+  }, [consultasVigentes]);
+
+  // Vencimiento de productos: vigente / por vencer (≤30 días) / vencido / sin vencimiento.
+  const vencimientoPieData = useMemo(() => {
+    const hoy = new Date();
+    const limite = new Date();
+    limite.setDate(hoy.getDate() + 30);
+    const cnt: Record<string, number> = {};
+    (productos.data ?? []).forEach((p) => {
+      let cat: string;
+      if (!p.fechaVencimiento) cat = "Sin vencimiento";
+      else {
+        const f = new Date(p.fechaVencimiento);
+        cat = f < hoy ? "Vencido" : f <= limite ? "Por vencer" : "Vigente";
+      }
+      cnt[cat] = (cnt[cat] ?? 0) + 1;
+    });
+    const orden = ["Vencido", "Por vencer", "Vigente", "Sin vencimiento"];
+    return orden
+      .filter((name) => cnt[name])
+      .map((name) => ({ name, value: cnt[name] }));
+  }, [productos.data]);
 
   // Organizaciones por tipo (cuántas hay de cada tipo).
   const orgTipoPieData = useMemo(() => {
@@ -638,6 +729,49 @@ export function Reportes() {
             )}
         </Card>
 
+        {/* Pie: animales por estado */}
+        <Card className="p-6">
+          <p className="font-hand text-xl text-clay-500 leading-none">población</p>
+          <h2 className="font-display text-2xl text-moss-800 mb-1">Animales por estado</h2>
+          <p className="text-xs text-ink-400 mb-3">Cómo se reparte la población actual del refugio</p>
+          {animales.loading ? <Spinner /> : animalEstadoPieData.length === 0
+            ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
+            : (
+              <ResponsiveContainer width="100%" height={270}>
+                <PieChart>
+                  <Pie data={animalEstadoPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={92} paddingAngle={3} dataKey="value"
+                    label={({ name, value }: any) => `${name}: ${value}`} labelLine={false} style={{ fontSize: 12 }}>
+                    {animalEstadoPieData.map((e, i) => <Cell key={i} fill={ANIMAL_ESTADO_PAL[e.name] ?? SPECIES_PALETTE[i % SPECIES_PALETTE.length]} stroke="white" strokeWidth={2} />)}
+                  </Pie>
+                  <Tooltip content={<ChartTip />} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+        </Card>
+
+        {/* Bar: consultas por mes */}
+        {puedeAccederConsultas && (
+          <Card className="p-6">
+            <p className="font-hand text-xl text-clay-500 leading-none">tendencia</p>
+            <h2 className="font-display text-2xl text-moss-800 mb-1">Consultas por mes</h2>
+            <p className="text-xs text-ink-400 mb-3">Actividad clínica de los últimos 6 meses</p>
+            {consultas.loading ? <Spinner /> : (
+              <ResponsiveContainer width="100%" height={270}>
+                <BarChart data={consultasPorMesData} barSize={34}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e9f6f2" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: "#5a6068" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,95,115,0.05)", radius: 8 }} />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]} fill={C.moss500}>
+                    <LabelList dataKey="value" position="top" style={{ fontSize: 12, fill: "#5a6068", fontWeight: 700 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        )}
+
         {/* Bar: estado */}
         {puedeAccederConsultas && (
           <Card className="p-6">
@@ -706,6 +840,31 @@ export function Reportes() {
                       <LabelList dataKey="stock" position="right" style={{ fontSize: 11, fill: "#5a6068", fontWeight: 700 }} />
                     </Bar>
                   </BarChart>
+                </ResponsiveContainer>
+              )}
+          </Card>
+        )}
+
+        {/* Pie: vencimiento de productos */}
+        {puedeAccederConsultas && (
+          <Card className="p-6">
+            <p className="font-hand text-xl text-clay-500 leading-none">inventario</p>
+            <h2 className="font-display text-2xl text-moss-800 mb-1">Vencimiento de productos</h2>
+            <p className="text-xs text-ink-400 mb-3">
+              <span className="text-clay-500 font-semibold">Vencido</span> · <span className="text-sun-400 font-semibold">Por vencer</span> (≤30 días) · <span className="text-moss-500 font-semibold">Vigente</span>
+            </p>
+            {productos.loading ? <Spinner /> : vencimientoPieData.length === 0
+              ? <p className="text-center text-ink-400 py-10 font-hand text-xl">sin datos aún ♡</p>
+              : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <PieChart>
+                    <Pie data={vencimientoPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={92} paddingAngle={3} dataKey="value"
+                      label={({ name, value }: any) => `${name}: ${value}`} labelLine={false} style={{ fontSize: 12 }}>
+                      {vencimientoPieData.map((e, i) => <Cell key={i} fill={VENCIMIENTO_PAL[e.name] ?? C.ink400} stroke="white" strokeWidth={2} />)}
+                    </Pie>
+                    <Tooltip content={<ChartTip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
                 </ResponsiveContainer>
               )}
           </Card>

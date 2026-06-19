@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Plus, Phone } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Plus, Phone, Calendar, Eye } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
@@ -9,7 +10,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { useFetch } from "../hooks/useFetch";
 import { useToast } from "../components/Toast";
-import { veterinariosApi } from "../api/endpoints";
+import { consultasApi, veterinariosApi } from "../api/endpoints";
 import type { CrearVeterinarioDto, Veterinario } from "../types";
 
 const emptyForm: CrearVeterinarioDto = {
@@ -23,6 +24,24 @@ export function Veterinarios() {
   const { data, error, loading, reload } = useFetch(() =>
     veterinariosApi.list()
   );
+  const consultas = useFetch(() => consultasApi.list());
+  const consultasEsteMesPorVeterinario = useMemo(() => {
+    const conteo = new Map<string, number>();
+    const ahora = new Date();
+    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    const finMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+
+    for (const consulta of consultas.data ?? []) {
+      const fecha = new Date(consulta.fechaHora);
+      if (fecha < inicioMes || fecha >= finMes) continue;
+      conteo.set(
+        consulta.veterinarioId,
+        (conteo.get(consulta.veterinarioId) ?? 0) + 1
+      );
+    }
+
+    return conteo;
+  }, [consultas.data]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Veterinario | null>(null);
   const [form, setForm] = useState<CrearVeterinarioDto>(emptyForm);
@@ -103,18 +122,30 @@ export function Veterinarios() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {data.map((v) => (
             <Card key={v.id} className="p-5 flex flex-col">
-              <div className="flex items-start gap-3 mb-4">
+              <div className="flex items-start gap-3 mb-3">
                 <div className="w-11 h-11 rounded-full bg-moss-700 text-bone-50 font-display text-lg flex items-center justify-center">
                   {v.nombreCompleto.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-moss-800 truncate">
+                  <Link
+                    to={`/veterinarios/${v.id}`}
+                    className="font-medium text-moss-800 hover:text-moss-600 hover:underline decoration-moss-300 underline-offset-2 truncate block"
+                  >
                     {v.nombreCompleto}
-                  </p>
+                  </Link>
                   <div className="mt-1.5">
                     <Badge tone="clay">{v.especialidadPrincipal}</Badge>
                   </div>
                 </div>
+              </div>
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-bone-50 px-3 py-2">
+                <span className="text-xs font-medium text-ink-500">
+                  Consultas este mes
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-moss-100 px-2.5 py-1 text-xs font-semibold text-moss-700">
+                  <Calendar size={14} />
+                  {consultasEsteMesPorVeterinario.get(v.id) ?? 0}
+                </span>
               </div>
               <p className="flex items-center gap-2 text-sm text-ink-500">
                 <Phone size={13} className="text-moss-500" />
@@ -123,6 +154,11 @@ export function Veterinarios() {
                 </span>
               </p>
               <div className="flex justify-end gap-1 mt-4 pt-3 border-t border-moss-100">
+                <Link to={`/veterinarios/${v.id}`}>
+                  <Button size="sm" variant="ghost" icon={<Eye size={14} />}>
+                    Ver ficha
+                  </Button>
+                </Link>
                 <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
                   Editar
                 </Button>

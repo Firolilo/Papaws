@@ -29,13 +29,19 @@ export interface SeccionTabla {
   headers: string[];
   filas: string[][];
   vacio?: string;
+  total?: string[]; // fila de totales (pie de tabla, en negrita)
 }
 export interface SeccionTexto {
   titulo: string;
   tipo: "texto";
   texto: string;
 }
-export type SeccionPdf = SeccionDatos | SeccionTabla | SeccionTexto;
+export interface SeccionKpis {
+  titulo: string;
+  tipo: "kpis";
+  items: Array<{ label: string; valor: string }>;
+}
+export type SeccionPdf = SeccionDatos | SeccionTabla | SeccionTexto | SeccionKpis;
 
 export interface DocumentoPdf {
   tituloDoc: string; // tipo de documento (arriba a la derecha)
@@ -144,7 +150,32 @@ export async function descargarPdf(d: DocumentoPdf): Promise<void> {
   for (const s of d.secciones) {
     encabezadoSeccion(s.titulo);
 
-    if (s.tipo === "datos") {
+    if (s.tipo === "kpis") {
+      const items = s.items;
+      if (items.length > 0) {
+        const porFila = Math.min(items.length, 4);
+        const gap = 10;
+        const cajaW = (ancho - gap * (porFila - 1)) / porFila;
+        const cajaH = 44;
+        items.forEach((kpi, i) => {
+          const col = i % porFila;
+          if (col === 0) nuevaPaginaSiHaceFalta(cajaH + 8);
+          const bx = margin + col * (cajaW + gap);
+          doc.setFillColor(...COL.bone);
+          doc.roundedRect(bx, y, cajaW, cajaH, 6, 6, "F");
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(...COL.muted);
+          doc.text(kpi.label.toUpperCase(), bx + 10, y + 16);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(15);
+          doc.setTextColor(...COL.deep);
+          doc.text(kpi.valor, bx + 10, y + 35);
+          if (col === porFila - 1 || i === items.length - 1) y += cajaH + gap;
+        });
+        y += 8;
+      }
+    } else if (s.tipo === "datos") {
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
@@ -167,8 +198,10 @@ export async function descargarPdf(d: DocumentoPdf): Promise<void> {
           margin: { left: margin, right: margin },
           head: [s.headers],
           body: s.filas,
+          foot: s.total ? [s.total] : undefined,
           styles: { fontSize: 9, cellPadding: 5, textColor: COL.ink, lineColor: COL.line, lineWidth: 0.5, valign: "top" },
           headStyles: { fillColor: COL.bone, textColor: COL.muted, fontStyle: "bold", fontSize: 8.5 },
+          footStyles: { fillColor: COL.moss, textColor: COL.white, fontStyle: "bold", fontSize: 9 },
           alternateRowStyles: { fillColor: COL.zebra },
         });
         y = (doc as any).lastAutoTable.finalY + 18;

@@ -50,6 +50,13 @@ public class ConsultasController : ControllerBase
         return Ok(consultas.ToResponse());
     }
 
+    [HttpGet("servicio/{servicioId:guid}")]
+    public async Task<IActionResult> ObtenerPorServicio(Guid servicioId)
+    {
+        var consultas = await _consultaService.ObtenerPorServicioAsync(servicioId);
+        return Ok(consultas.ToResponse());
+    }
+
     [HttpPost]
     public async Task<IActionResult> Crear(CrearConsultaDto dto)
     {

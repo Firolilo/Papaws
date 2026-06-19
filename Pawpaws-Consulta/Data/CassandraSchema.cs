@@ -100,5 +100,23 @@ CREATE TABLE IF NOT EXISTS {keyspace}.consulta_codigos_by_veterinario (
     codigo text,
     PRIMARY KEY (veterinario_id, codigo)
 )"));
+
+        // Índice inverso servicio→consultas: permite listar en qué consultas se usó un servicio.
+        await session.ExecuteAsync(new SimpleStatement($@"
+CREATE TABLE IF NOT EXISTS {keyspace}.consulta_codigos_by_servicio (
+    servicio_id uuid,
+    codigo text,
+    PRIMARY KEY (servicio_id, codigo)
+)"));
+
+        // Backfill idempotente: reconstruye el índice inverso a partir de la relación
+        // consulta→servicios ya existente (INSERT con misma PK es sobrescritura, no duplica).
+        foreach (var fila in await session.ExecuteAsync(new SimpleStatement(
+            $"SELECT codigo, servicio_id FROM {keyspace}.consulta_servicios_by_codigo")))
+        {
+            await session.ExecuteAsync(new SimpleStatement(
+                $"INSERT INTO {keyspace}.consulta_codigos_by_servicio (servicio_id, codigo) VALUES (?, ?)",
+                fila.GetValue<Guid>("servicio_id"), fila.GetValue<string>("codigo")));
+        }
     }
 }

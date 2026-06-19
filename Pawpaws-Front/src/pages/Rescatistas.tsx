@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, PawPrint, Eye } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input } from "../components/Field";
@@ -27,7 +27,15 @@ export function Rescatistas() {
   const { data, error, loading, reload } = useFetch(() =>
     rescatistasApi.list()
   );
+  const animales = useFetch(() => animalesApi.list());
   const organizaciones = useFetch(() => organizacionesApi.list());
+  const animalesPorRescatista = useMemo(() => {
+    const conteo = new Map<string, number>();
+    for (const animal of animales.data ?? []) {
+      conteo.set(animal.rescatistaId, (conteo.get(animal.rescatistaId) ?? 0) + 1);
+    }
+    return conteo;
+  }, [animales.data]);
   const organizacionOptions = useMemo(
     () =>
       (organizaciones.data ?? []).map((o) => ({
@@ -179,7 +187,7 @@ export function Rescatistas() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibles.map((r) => (
             <Card key={r.id} className="p-5 flex flex-col">
-              <div className="flex items-start gap-3 mb-4">
+              <div className="flex items-start gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-moss-100 text-moss-700 font-display text-lg flex items-center justify-center">
                   {r.nombreCompleto.charAt(0)}
                 </div>
@@ -194,6 +202,15 @@ export function Rescatistas() {
                     {r.organizacion}
                   </p>
                 </div>
+              </div>
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-bone-50 px-3 py-2">
+                <span className="text-xs font-medium text-ink-500">
+                  Animales asignados
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-moss-100 px-2.5 py-1 text-xs font-semibold text-moss-700">
+                  <PawPrint size={14} />
+                  {animalesPorRescatista.get(r.id) ?? 0}
+                </span>
               </div>
               <ul className="space-y-1.5 text-sm text-ink-500">
                 <li className="flex items-center gap-2">
@@ -211,21 +228,28 @@ export function Rescatistas() {
                   {r.zonaOperacion}
                 </li>
               </ul>
-              {puedeGestionarAnimales && (
-                <div className="flex justify-end gap-1 mt-4 pt-3 border-t border-moss-100">
-                  <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
-                    Editar
+              <div className="flex justify-end gap-1 mt-4 pt-3 border-t border-moss-100">
+                <Link to={`/rescatistas/${r.id}`}>
+                  <Button size="sm" variant="ghost" icon={<Eye size={14} />}>
+                    Ver ficha
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-clay-600 hover:bg-clay-50"
-                    onClick={() => openDelete(r)}
-                  >
-                    Eliminar
-                  </Button>
-                </div>
-              )}
+                </Link>
+                {puedeGestionarAnimales && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-clay-600 hover:bg-clay-50"
+                      onClick={() => openDelete(r)}
+                    >
+                      Eliminar
+                    </Button>
+                  </>
+                )}
+              </div>
             </Card>
           ))}
         </div>

@@ -9,6 +9,7 @@ public interface IConsultaService
     Task<Pawpaws.Consulta.Models.Consulta?> ObtenerPorCodigoAsync(string codigo);
     Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorAnimalAsync(Guid animalId);
     Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorVeterinarioAsync(Guid veterinarioId);
+    Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorServicioAsync(Guid servicioId);
     Task<Pawpaws.Consulta.Models.Consulta> CrearAsync(CrearConsultaDto dto);
 
     Task<bool> ActualizarAsync(string codigo, ActualizarConsultaDto dto);

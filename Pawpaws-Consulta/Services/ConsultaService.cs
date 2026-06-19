@@ -38,6 +38,9 @@ public class ConsultaService : IConsultaService
     private readonly PreparedStatement _deleteConsultaByCodigoStatement;
     private readonly PreparedStatement _deleteCodigoByAnimalStatement;
     private readonly PreparedStatement _deleteCodigoByVeterinarioStatement;
+    private readonly PreparedStatement _insertCodigoByServicioStatement;
+    private readonly PreparedStatement _selectCodigosByServicioStatement;
+    private readonly PreparedStatement _deleteCodigoByServicioStatement;
 
     public ConsultaService(
         Cassandra.ISession session,
@@ -72,6 +75,9 @@ public class ConsultaService : IConsultaService
         _deleteConsultaByCodigoStatement = _session.Prepare("DELETE FROM consultas_by_codigo WHERE codigo = ?");
         _deleteCodigoByAnimalStatement = _session.Prepare("DELETE FROM consulta_codigos_by_animal WHERE animal_id = ? AND codigo = ?");
         _deleteCodigoByVeterinarioStatement = _session.Prepare("DELETE FROM consulta_codigos_by_veterinario WHERE veterinario_id = ? AND codigo = ?");
+        _insertCodigoByServicioStatement = _session.Prepare("INSERT INTO consulta_codigos_by_servicio (servicio_id, codigo) VALUES (?, ?)");
+        _selectCodigosByServicioStatement = _session.Prepare("SELECT codigo FROM consulta_codigos_by_servicio WHERE servicio_id = ?");
+        _deleteCodigoByServicioStatement = _session.Prepare("DELETE FROM consulta_codigos_by_servicio WHERE servicio_id = ? AND codigo = ?");
     }
 
     public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerTodosAsync()
@@ -107,6 +113,12 @@ public class ConsultaService : IConsultaService
     public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorVeterinarioAsync(Guid veterinarioId)
     {
         var codigos = await _session.ExecuteAsync(_selectCodigosByVeterinarioStatement.Bind(veterinarioId));
+        return await ObtenerLivianasPorCodigosAsync(codigos.Select(row => row.GetValue<string>("codigo")));
+    }
+
+    public async Task<List<Pawpaws.Consulta.Models.Consulta>> ObtenerPorServicioAsync(Guid servicioId)
+    {
+        var codigos = await _session.ExecuteAsync(_selectCodigosByServicioStatement.Bind(servicioId));
         return await ObtenerLivianasPorCodigosAsync(codigos.Select(row => row.GetValue<string>("codigo")));
     }
 
@@ -174,6 +186,8 @@ public class ConsultaService : IConsultaService
         foreach (var servicioId in consulta.ServicioIds)
         {
             await _session.ExecuteAsync(_insertConsultaServicioStatement.Bind(consulta.Codigo, servicioId));
+            // Índice inverso: permite listar en qué consultas se usó cada servicio.
+            await _session.ExecuteAsync(_insertCodigoByServicioStatement.Bind(servicioId, consulta.Codigo));
         }
 
         // Índices de búsqueda por animal / veterinario.
@@ -201,11 +215,16 @@ public class ConsultaService : IConsultaService
 
         await _session.ExecuteAsync(_updateCoreStatement.Bind(dto.FechaHora, dto.Observaciones, codigo));
 
-        // Reemplazar servicios
+        // Reemplazar servicios (y mantener sincronizado el índice inverso por servicio).
+        foreach (var servicioId in consulta.ServicioIds)
+        {
+            await _session.ExecuteAsync(_deleteCodigoByServicioStatement.Bind(servicioId, codigo));
+        }
         await _session.ExecuteAsync(_deleteConsultaServiciosStatement.Bind(codigo));
         foreach (var servicioId in servicios)
         {
             await _session.ExecuteAsync(_insertConsultaServicioStatement.Bind(codigo, servicioId));
+            await _session.ExecuteAsync(_insertCodigoByServicioStatement.Bind(servicioId, codigo));
         }
 
         return true;
@@ -401,6 +420,12 @@ public class ConsultaService : IConsultaService
     private async Task EliminarConsultaCompletaAsync(Pawpaws.Consulta.Models.Consulta consulta)
     {
         await RestaurarStockAsync(consulta.Codigo);
+        // Limpiar el índice inverso por servicio antes de borrar la relación consulta→servicios.
+        var serviciosDeConsulta = await ObtenerServiciosAsync(consulta.Codigo);
+        foreach (var servicioId in serviciosDeConsulta)
+        {
+            await _session.ExecuteAsync(_deleteCodigoByServicioStatement.Bind(servicioId, consulta.Codigo));
+        }
         await _session.ExecuteAsync(_deleteConsultaServiciosStatement.Bind(consulta.Codigo));
         await _session.ExecuteAsync(_deleteCodigoByAnimalStatement.Bind(consulta.AnimalId, consulta.Codigo));
         await _session.ExecuteAsync(_deleteCodigoByVeterinarioStatement.Bind(consulta.VeterinarioId, consulta.Codigo));

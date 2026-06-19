@@ -128,6 +128,8 @@ export const consultasApi = {
       "consulta",
       `/api/consultas/veterinario/${veterinarioId}`
     ),
+  porServicio: (servicioId: string) =>
+    apiGet<Consulta[]>("consulta", `/api/consultas/servicio/${servicioId}`),
   create: (dto: CrearConsultaDto) =>
     apiPost<Consulta>("consulta", "/api/consultas", dto),
   actualizar: (codigo: string, dto: ActualizarConsultaDto) =>

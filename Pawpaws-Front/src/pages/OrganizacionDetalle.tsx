@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -35,6 +35,34 @@ export function OrganizacionDetalle() {
         .sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto)),
     [rescatistas.data, id]
   );
+
+  // "Miembro desde": fecha del evento más reciente en que cada rescatista entró a ESTA
+  // organización (alta o cambio). Se deriva del historial de organización del rescatista.
+  const nombreOrg = organizacion.data?.nombre;
+  const [miembroDesde, setMiembroDesde] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!nombreOrg || miembros.length === 0) return;
+    let cancelado = false;
+    Promise.all(
+      miembros.map(async (r) => {
+        try {
+          const eventos = await rescatistasApi.historialOrganizaciones(r.id);
+          const entrada = eventos
+            .filter((e) => e.organizacionNueva === nombreOrg)
+            .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+          return [r.id, entrada?.fecha ?? ""] as const;
+        } catch {
+          return [r.id, ""] as const;
+        }
+      })
+    ).then((pares) => {
+      if (cancelado) return;
+      setMiembroDesde(Object.fromEntries(pares));
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [nombreOrg, miembros]);
 
   if (organizacion.loading) return <Spinner />;
   if (organizacion.error) return <ErrorBox message={organizacion.error} />;
@@ -102,6 +130,7 @@ export function OrganizacionDetalle() {
                 <tr>
                   <th className="text-left font-semibold px-5 py-3">Rescatista</th>
                   <th className="text-left font-semibold px-5 py-3">Zona</th>
+                  <th className="text-left font-semibold px-5 py-3">Miembro desde</th>
                   <th className="text-right font-semibold px-5 py-3">Animales</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -119,6 +148,15 @@ export function OrganizacionDetalle() {
                       </Link>
                     </td>
                     <td className="px-5 py-3.5 text-ink-500">{r.zonaOperacion}</td>
+                    <td className="px-5 py-3.5 text-ink-500 text-[12.5px]">
+                      {miembroDesde[r.id]
+                        ? new Date(miembroDesde[r.id]).toLocaleDateString("es", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </td>
                     <td className="px-5 py-3.5 text-right font-mono">
                       {animalesPorRescatista.get(r.id) ?? 0}
                     </td>

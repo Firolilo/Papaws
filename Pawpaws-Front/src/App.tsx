@@ -12,7 +12,9 @@ import { OrganizacionDetalle } from "./pages/OrganizacionDetalle";
 import { Animales } from "./pages/Animales";
 import { AnimalDetalle } from "./pages/AnimalDetalle";
 import { Veterinarios } from "./pages/Veterinarios";
+import { VeterinarioDetalle } from "./pages/VeterinarioDetalle";
 import { Servicios } from "./pages/Servicios";
+import { ServicioDetalle } from "./pages/ServicioDetalle";
 import { Productos } from "./pages/Productos";
 import { Consultas } from "./pages/Consultas";
 import { ConsultaDetalle } from "./pages/ConsultaDetalle";
@@ -46,7 +48,9 @@ export default function App() {
               }
             >
               <Route path="veterinarios" element={<Veterinarios />} />
+              <Route path="veterinarios/:id" element={<VeterinarioDetalle />} />
               <Route path="servicios" element={<Servicios />} />
+              <Route path="servicios/:id" element={<ServicioDetalle />} />
               <Route path="productos" element={<Productos />} />
               <Route path="consultas" element={<Consultas />} />
               <Route path="consultas/:codigo" element={<ConsultaDetalle />} />

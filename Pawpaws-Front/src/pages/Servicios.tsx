@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Clock } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, Clock, Eye } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card, EmptyState, ErrorBox, Spinner } from "../components/Card";
 import { Input, Textarea } from "../components/Field";
@@ -109,9 +110,12 @@ export function Servicios() {
           {data.map((s) => (
             <Card key={s.id} className="p-6">
               <div className="flex items-baseline justify-between gap-3 mb-2">
-                <h3 className="font-display text-xl text-moss-800">
+                <Link
+                  to={`/servicios/${s.id}`}
+                  className="font-display text-xl text-moss-800 hover:text-moss-600 hover:underline decoration-moss-300 underline-offset-2"
+                >
                   {s.nombre}
-                </h3>
+                </Link>
                 <span className="font-mono text-sm text-clay-600 font-semibold whitespace-nowrap">
                   {fmt.format(s.precioBase)}
                 </span>
@@ -125,6 +129,11 @@ export function Servicios() {
                   {s.duracionEstimadaMinutos} min estimados
                 </div>
                 <div className="flex gap-1">
+                  <Link to={`/servicios/${s.id}`}>
+                    <Button size="sm" variant="ghost" icon={<Eye size={14} />}>
+                      Ver ficha
+                    </Button>
+                  </Link>
                   <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>
                     Editar
                   </Button>
