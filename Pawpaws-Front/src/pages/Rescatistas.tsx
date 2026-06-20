@@ -7,7 +7,9 @@ import { Input } from "../components/Field";
 import { Combobox } from "../components/Combobox";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 import { animalesApi, organizacionesApi, rescatistasApi } from "../api/endpoints";
@@ -65,6 +67,11 @@ export function Rescatistas() {
   const visibles = useMemo(
     () => (data ?? []).filter((r) => !r.oculto),
     [data]
+  );
+
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    visibles,
+    10
   );
 
   const reasignarOpciones = useMemo(
@@ -204,8 +211,9 @@ export function Rescatistas() {
       )}
 
       {!loading && data && visibles.length > 0 && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibles.map((r) => (
+          {pageItems.map((r) => (
             <Card key={r.id} className="p-5 flex flex-col">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-moss-100 text-moss-700 font-display text-lg flex items-center justify-center">
@@ -273,6 +281,13 @@ export function Rescatistas() {
             </Card>
           ))}
         </div>
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          total={total}
+        />
+        </>
       )}
 
       <Modal

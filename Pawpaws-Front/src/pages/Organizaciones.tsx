@@ -8,7 +8,9 @@ import { Combobox } from "../components/Combobox";
 import { Modal } from "../components/Modal";
 import { Badge } from "../components/Badge";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 import { animalesApi, organizacionesApi, rescatistasApi } from "../api/endpoints";
@@ -35,6 +37,11 @@ export function Organizaciones() {
   );
   const rescatistas = useFetch(() => rescatistasApi.list());
   const animales = useFetch(() => animalesApi.list());
+
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    data ?? [],
+    10
+  );
 
   // Cuántos animales tiene cada rescatista (para reasignar al darlo de baja).
   const animalesPorRescatista = useMemo(() => {
@@ -228,7 +235,7 @@ export function Organizaciones() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-moss-100">
-                    {data.map((o) => (
+                    {pageItems.map((o) => (
                       <tr key={o.id} className="hover:bg-bone-50/60 transition-colors">
                         <td className="px-5 py-3.5">
                           <Link
@@ -271,6 +278,14 @@ export function Organizaciones() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="px-5 pb-4">
+                <Pagination
+                  page={page}
+                  pageCount={pageCount}
+                  onChange={setPage}
+                  total={total}
+                />
               </div>
             </Card>
           )}

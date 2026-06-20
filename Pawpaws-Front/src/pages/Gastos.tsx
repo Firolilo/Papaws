@@ -8,7 +8,9 @@ import { Button } from "../components/Button";
 import { Card, ErrorBox, Spinner } from "../components/Card";
 import { Badge, estadoTone } from "../components/Badge";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { consultasApi, animalesApi } from "../api/endpoints";
 import { descargarPdf, SeccionPdf } from "../utils/pdf";
 import type { GastoConsulta } from "../types";
@@ -72,6 +74,21 @@ export function Gastos() {
     productos: reales.reduce((s, g) => s + g.costoProductos, 0),
     consultas: reales.length,
   }), [reales]);
+
+  // Lista plana (más reciente primero) para paginar de a 10, conservando el total de cada mes.
+  const gastosOrdenados = useMemo(
+    () => porMes.flatMap((m) => m.items),
+    [porMes]
+  );
+  const totalPorMes = useMemo(() => {
+    const map = new Map<string, number>();
+    porMes.forEach((m) => map.set(m.clave, m.total));
+    return map;
+  }, [porMes]);
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    gastosOrdenados,
+    10
+  );
 
   // Datos del gráfico: últimos 6 meses con su total (cronológico ascendente).
   const chartData = useMemo(
@@ -186,21 +203,26 @@ export function Gastos() {
           </p>
         </Card>
       ) : (
-        <div className="space-y-8">
-          {porMes.map((m) => (
-            <section key={m.clave}>
-              <div className="flex items-baseline justify-between gap-3 mb-3">
-                <h2 className="font-display text-2xl text-moss-800 capitalize">{etiquetaMes(m.clave)}</h2>
-                <div className="text-right">
-                  <p className="font-display text-2xl text-moss-800">{fmt.format(m.total)}</p>
-                  <p className="text-[12px] text-ink-400">
-                    {fmt.format(m.servicios)} servicios · {fmt.format(m.productos)} productos
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {m.items.map((g) => (
-                  <Card key={g.codigo} className="p-4">
+        <>
+          <div className="space-y-3">
+            {pageItems.map((g, idx) => {
+              const mesActual = claveMes(g.fechaHora);
+              const mesPrevio =
+                idx > 0 ? claveMes(pageItems[idx - 1].fechaHora) : null;
+              const mostrarMes = mesActual !== mesPrevio;
+              return (
+                <div key={g.codigo}>
+                  {mostrarMes && (
+                    <div className="flex items-baseline justify-between gap-3 mb-3 mt-8 first:mt-0">
+                      <h2 className="font-display text-2xl text-moss-800 capitalize">
+                        {etiquetaMes(mesActual)}
+                      </h2>
+                      <p className="font-display text-xl text-moss-800">
+                        {fmt.format(totalPorMes.get(mesActual) ?? 0)}
+                      </p>
+                    </div>
+                  )}
+                  <Card className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <Link
@@ -244,11 +266,17 @@ export function Gastos() {
                       </div>
                     )}
                   </Card>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            onChange={setPage}
+            total={total}
+          />
+        </>
       )}
     </>
   );

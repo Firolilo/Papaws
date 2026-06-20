@@ -15,7 +15,9 @@ import { ServicioPicker } from "../components/ServicioPicker";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge, estadoTone } from "../components/Badge";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useToast } from "../components/Toast";
 import {
   animalesApi,
@@ -128,6 +130,12 @@ export function Consultas() {
     vetFilter,
     search,
   ]);
+
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    filtered,
+    10,
+    `${search}|${estadoFilter}|${vetFilter}`
+  );
 
   // Turnos de hoy: pendientes/confirmadas con fecha de hoy (para el resumen de agenda).
   const turnosHoy = useMemo(
@@ -283,8 +291,9 @@ export function Consultas() {
               turnosHoy={turnosHoy}
             />
           ) : (
+            <>
             <div className="grid grid-cols-1 gap-3">
-              {filtered.map((c) => {
+              {pageItems.map((c) => {
                 const animal = animalesById[c.animalId];
                 const vet = vetsById[c.veterinarioId];
                 const date = new Date(c.fechaHora);
@@ -345,6 +354,13 @@ export function Consultas() {
                 );
               })}
             </div>
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              onChange={setPage}
+              total={total}
+            />
+            </>
           )}
         </>
       )}

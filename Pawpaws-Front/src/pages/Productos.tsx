@@ -7,7 +7,9 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useToast } from "../components/Toast";
 import { productosApi } from "../api/endpoints";
 import type { CrearProductoDto, Producto } from "../types";
@@ -52,6 +54,11 @@ export function Productos() {
   const [stockValue, setStockValue] = useState("");
   const [stockSaving, setStockSaving] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
+
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    data ?? [],
+    10
+  );
 
   function openCreate() {
     setEditing(null);
@@ -184,7 +191,7 @@ export function Productos() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-moss-100">
-                {data.map((p) => {
+                {pageItems.map((p) => {
                   const low = p.stockDisponible <= 10;
                   const out = p.stockDisponible === 0;
                   return (
@@ -258,6 +265,14 @@ export function Productos() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="px-5 pb-4">
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              onChange={setPage}
+              total={total}
+            />
           </div>
         </Card>
       )}

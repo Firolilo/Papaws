@@ -9,7 +9,9 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { Badge, Tone } from "../components/Badge";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 import { animalesApi, rescatistasApi } from "../api/endpoints";
@@ -110,6 +112,12 @@ export function Animales() {
           : true)
     );
   }, [animales.data, filter, especieFilter, rescatistaFilter]);
+
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    filtered,
+    10,
+    `${filter}|${especieFilter}|${rescatistaFilter}`
+  );
 
   function openCreate() {
     setEditing(null);
@@ -257,7 +265,7 @@ export function Animales() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-moss-100">
-                    {filtered.map((a) => (
+                    {pageItems.map((a) => (
                       <tr
                         key={a.id}
                         className="hover:bg-bone-50/60 transition-colors"
@@ -321,6 +329,14 @@ export function Animales() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="px-5 pb-4">
+                <Pagination
+                  page={page}
+                  pageCount={pageCount}
+                  onChange={setPage}
+                  total={total}
+                />
               </div>
             </Card>
           )}

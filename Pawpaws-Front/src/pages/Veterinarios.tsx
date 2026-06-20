@@ -9,7 +9,9 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useToast } from "../components/Toast";
 import { consultasApi, veterinariosApi } from "../api/endpoints";
 import { ESPECIALIDADES_VETERINARIAS } from "../constants";
@@ -29,6 +31,10 @@ export function Veterinarios() {
     veterinariosApi.list()
   );
   const consultas = useFetch(() => consultasApi.list());
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    data ?? [],
+    10
+  );
   const consultasEsteMesPorVeterinario = useMemo(() => {
     const conteo = new Map<string, number>();
     const ahora = new Date();
@@ -127,8 +133,9 @@ export function Veterinarios() {
       )}
 
       {!loading && data && data.length > 0 && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {data.map((v) => (
+          {pageItems.map((v) => (
             <Card key={v.id} className="p-5 flex flex-col">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-11 h-11 rounded-full bg-moss-700 text-bone-50 font-display text-lg flex items-center justify-center">
@@ -182,6 +189,13 @@ export function Veterinarios() {
             </Card>
           ))}
         </div>
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          total={total}
+        />
+        </>
       )}
 
       <Modal

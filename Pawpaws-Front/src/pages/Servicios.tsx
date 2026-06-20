@@ -7,7 +7,9 @@ import { Input, Textarea } from "../components/Field";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { PageHeader } from "../components/PageHeader";
+import { Pagination } from "../components/Pagination";
 import { useFetch } from "../hooks/useFetch";
+import { usePaginated } from "../hooks/usePaginated";
 import { useToast } from "../components/Toast";
 import { serviciosApi } from "../api/endpoints";
 import type { CrearServicioDto, Servicio } from "../types";
@@ -29,6 +31,10 @@ const fmt = new Intl.NumberFormat("es-BO", {
 export function Servicios() {
   const toast = useToast();
   const { data, error, loading, reload } = useFetch(() => serviciosApi.list());
+  const { page, setPage, pageCount, pageItems, total } = usePaginated(
+    data ?? [],
+    10
+  );
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Servicio | null>(null);
   const [form, setForm] = useState<CrearServicioDto>(emptyForm);
@@ -107,8 +113,9 @@ export function Servicios() {
       )}
 
       {!loading && data && data.length > 0 && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {data.map((s) => (
+          {pageItems.map((s) => (
             <Card key={s.id} className="p-6">
               <div className="flex items-baseline justify-between gap-3 mb-2">
                 <Link
@@ -151,6 +158,13 @@ export function Servicios() {
             </Card>
           ))}
         </div>
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onChange={setPage}
+          total={total}
+        />
+        </>
       )}
 
       <Modal

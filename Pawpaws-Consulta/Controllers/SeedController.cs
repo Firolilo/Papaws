@@ -75,13 +75,13 @@ public class SeedController : ControllerBase
         var serviciosData = new (string Nombre, string Desc, int Min, decimal Precio)[]
         {
             ("Consulta General",   "Revisión y diagnóstico inicial",                30,  30m),
-            ("Vacunación",         "Aplicación de vacunas preventivas",             20,  40m),
-            ("Cirugía Menor",      "Procedimientos quirúrgicos menores",           90, 250m),
-            ("Limpieza Dental",    "Profilaxis dental con ultrasonido",             60, 150m),
-            ("Examen de Sangre",   "Hemograma completo y bioquímica",              15,  80m),
-            ("Desparasitación",    "Control antiparasitario interno y externo",    25,  25m),
-            ("Rx Torácico",        "Radiografía de tórax digital",                 20, 120m),
-            ("Ecografía",          "Ultrasonido abdominal diagnóstico",            40, 150m),
+            ("Vacunación",         "Aplicación de vacunas preventivas",             20,  45m),
+            ("Cirugía Menor",      "Procedimientos quirúrgicos menores",           90, 280m),
+            ("Limpieza Dental",    "Profilaxis dental con ultrasonido",             60, 160m),
+            ("Examen de Sangre",   "Hemograma completo y bioquímica",              15,  90m),
+            ("Desparasitación",    "Control antiparasitario interno y externo",    25,  20m),
+            ("Rx Torácico",        "Radiografía de tórax digital",                 20, 130m),
+            ("Ecografía",          "Ultrasonido abdominal diagnóstico",            40, 170m),
         };
 
         var serviciosExistentes = (await _servicioService.ObtenerTodosAsync())
@@ -120,14 +120,14 @@ public class SeedController : ControllerBase
         {
             ("Amoxicilina 250mg",    "Medicamento",   "Comprimido",  45,    3m),
             ("Ibuprofeno Vet.",      "Medicamento",   "Comprimido",  30,    2m),
-            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12,   35m),
+            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12,   38m),
             ("Jeringa 5ml",          "Material",      "Unidad",     150,    2m),
-            ("Algodón Estéril",      "Material",      "Rollo",        8,   15m),
-            ("Bisturí #22",          "Instrumental",  "Unidad",       3,    6m),
-            ("Ivermectina 1%",       "Medicamento",   "ml",          20,    8m),
-            ("Sutura 3/0",           "Material",      "Unidad",      35,   20m),
-            ("Guantes Estériles M",  "Material",      "Par",         80,    3m),
-            ("Suero Fisiológico",    "Líquido",       "Frasco",       5,   12m),
+            ("Algodón Estéril",      "Material",      "Rollo",        8,   18m),
+            ("Bisturí #22",          "Instrumental",  "Unidad",       3,    7m),
+            ("Ivermectina 1%",       "Medicamento",   "ml",          20,    9m),
+            ("Sutura 3/0",           "Material",      "Unidad",      35,   22m),
+            ("Guantes Estériles M",  "Material",      "Par",         80,    4m),
+            ("Suero Fisiológico",    "Líquido",       "Frasco",       5,   14m),
         };
 
         var productosExistentes = (await _productoService.ObtenerTodosAsync())
