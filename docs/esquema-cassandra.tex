@@ -1,0 +1,266 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación y tipografía ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% --- Diseño de página y tablas ---
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage[table]{xcolor}
+\usepackage{titlesec}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=teal!60!black,
+  urlcolor=teal!60!black,
+  pdftitle={Esquema de tablas en Cassandra - Papaws}
+}
+
+% Colores corporativos aproximados del proyecto
+\definecolor{moss}{HTML}{005F73}
+\definecolor{mosslight}{HTML}{D7E8E6}
+\definecolor{clay}{HTML}{BB3E03}
+
+\titleformat{\section}{\Large\bfseries\color{moss}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{clay}}{\thesubsection}{0.6em}{}
+
+% Tipos de columna a ancho fijo
+\newcolumntype{C}{>{\ttfamily}p{4.6cm}}   % nombre de columna (monoespaciado)
+\newcolumntype{T}{>{\ttfamily}p{3.2cm}}   % tipo de dato (monoespaciado)
+\newcolumntype{R}{p{6.0cm}}               % rol / descripción
+
+% Encabezado de tabla reutilizable
+\newcommand{\cabecera}{%
+  \rowcolor{moss}\textcolor{white}{\textbf{Columna}} &
+  \textcolor{white}{\textbf{Tipo}} &
+  \textcolor{white}{\textbf{Rol}} \\
+}
+
+\title{\textbf{\color{moss}Esquema de tablas en Cassandra}\\[0.3em]
+\large Proyecto Papaws}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\noindent
+El sistema usa \textbf{dos keyspaces} independientes, uno por microservicio, ambos
+con la estrategia \texttt{SimpleStrategy} y \texttt{replication\_factor = 2}. El
+modelo sigue el patrón de Cassandra de \emph{una tabla por consulta} (\emph{query-first}):
+los datos se desnormalizan y se replican en varias tablas para poder leerlos por
+distintas claves sin usar \texttt{ALLOW FILTERING}.
+
+\vspace{0.4em}
+\noindent\textbf{Leyenda:}\;
+\colorbox{mosslight}{\textbf{PP}} = clave de partición \quad
+\colorbox{mosslight}{\textbf{CC}} = columna de \emph{clustering} \quad
+\textemdash{} = columna regular.
+
+% ============================================================
+\section{Keyspace \texttt{papaws\_animales}}
+% ============================================================
+Servicio de Rescatistas y Animales.
+
+% ----- rescatistas_by_id -----
+\subsection{\texttt{rescatistas\_by\_id}}
+Catálogo de rescatistas. Incluye el rescatista interno \emph{Refugio}
+(\texttt{oculto = true}), destino por defecto al reasignar animales.
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{id} & uuid & \textbf{PP} \textemdash{} identificador del rescatista \\
+nombre\_completo & text & \textemdash \\
+telefono\_contacto & text & \textemdash \\
+correo\_electronico & text & \textemdash \\
+organizacion & text & \textemdash \\
+zona\_operacion & text & \textemdash \\
+activo & boolean & Borrado lógico (\texttt{false} = dado de baja) \\
+oculto & boolean & No se muestra en la gestión (p.\,ej. Refugio) \\
+\end{longtable}
+
+% ----- animales_by_id -----
+\subsection{\texttt{animales\_by\_id}}
+Tabla principal de animales, consultada por su identificador.
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{id} & uuid & \textbf{PP} \textemdash{} identificador del animal \\
+nombre & text & \textemdash \\
+especie & text & \textemdash \\
+peso\_actual & decimal & \textemdash \\
+fecha\_ingreso & timestamp & \textemdash \\
+rescatista\_id & uuid & Referencia al rescatista \\
+\end{longtable}
+
+% ----- animales_by_rescatista -----
+\subsection{\texttt{animales\_by\_rescatista}}
+Réplica desnormalizada para listar los animales de un rescatista
+(usada en la reasignación al eliminar un rescatista).
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{rescatista\_id} & uuid & \textbf{PP} \textemdash{} agrupa por rescatista \\
+\texttt{id} & uuid & \textbf{CC} \textemdash{} identificador del animal \\
+nombre & text & \textemdash \\
+especie & text & \textemdash \\
+peso\_actual & decimal & \textemdash \\
+fecha\_ingreso & timestamp & \textemdash \\
+\end{longtable}
+
+% ============================================================
+\section{Keyspace \texttt{papaws\_consulta}}
+% ============================================================
+Servicio de Consultas, Veterinarios, Servicios y Productos.
+
+% ----- veterinarios_by_id -----
+\subsection{\texttt{veterinarios\_by\_id}}
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{id} & uuid & \textbf{PP} \textemdash{} identificador del veterinario \\
+nombre\_completo & text & \textemdash \\
+telefono\_contacto & text & \textemdash \\
+especialidad\_principal & text & \textemdash \\
+activo & boolean & Borrado lógico \\
+\end{longtable}
+
+% ----- servicios_by_id -----
+\subsection{\texttt{servicios\_by\_id}}
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{id} & uuid & \textbf{PP} \textemdash{} identificador del servicio \\
+nombre & text & \textemdash \\
+descripcion & text & \textemdash \\
+duracion\_estimadaminutos & int & Duración estimada (minutos) \\
+precio\_base & decimal & \textemdash \\
+activo & boolean & Borrado lógico \\
+\end{longtable}
+
+% ----- productos_by_id -----
+\subsection{\texttt{productos\_by\_id}}
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{id} & uuid & \textbf{PP} \textemdash{} identificador del producto \\
+nombre & text & \textemdash \\
+tipo & text & \textemdash \\
+unidad\_medida & text & \textemdash \\
+stock\_disponible & int & Inventario disponible \\
+activo & boolean & Borrado lógico \\
+\end{longtable}
+
+% ----- consultas_by_codigo -----
+\subsection{\texttt{consultas\_by\_codigo}}
+Tabla principal de consultas, consultadas por su código.
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{codigo} & text & \textbf{PP} \textemdash{} código de la consulta \\
+fecha\_hora & timestamp & \textemdash \\
+estado & text & Pendiente / Confirmada / Completada / Cancelada \\
+observaciones & text & \textemdash \\
+diagnostico & text & \textemdash \\
+indicaciones\_seguimiento & text & \textemdash \\
+animal\_id & uuid & Referencia al animal \\
+veterinario\_id & uuid & Referencia al veterinario \\
+\end{longtable}
+
+% ----- consulta_servicios_by_codigo -----
+\subsection{\texttt{consulta\_servicios\_by\_codigo}}
+Servicios asociados a cada consulta (relación N a N).
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{codigo} & text & \textbf{PP} \textemdash{} código de la consulta \\
+\texttt{servicio\_id} & uuid & \textbf{CC} \textemdash{} servicio asociado \\
+\end{longtable}
+
+% ----- consulta_productos_by_codigo -----
+\subsection{\texttt{consulta\_productos\_by\_codigo}}
+Productos utilizados en cada consulta y la cantidad consumida.
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{codigo} & text & \textbf{PP} \textemdash{} código de la consulta \\
+\texttt{producto\_id} & uuid & \textbf{CC} \textemdash{} producto usado \\
+cantidad\_usada & int & Cantidad descontada del stock \\
+\end{longtable}
+
+% ----- consulta_codigos_by_animal -----
+\subsection{\texttt{consulta\_codigos\_by\_animal}}
+Índice puntero: consultas de un animal (solo guarda el código, inmutable).
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{animal\_id} & uuid & \textbf{PP} \textemdash{} agrupa por animal \\
+\texttt{codigo} & text & \textbf{CC} \textemdash{} código de la consulta \\
+\end{longtable}
+
+% ----- consulta_codigos_by_veterinario -----
+\subsection{\texttt{consulta\_codigos\_by\_veterinario}}
+Índice puntero: consultas de un veterinario.
+
+\begin{longtable}{C T R}
+\cabecera
+\endfirsthead
+\cabecera
+\endhead
+\texttt{veterinario\_id} & uuid & \textbf{PP} \textemdash{} agrupa por veterinario \\
+\texttt{codigo} & text & \textbf{CC} \textemdash{} código de la consulta \\
+\end{longtable}
+
+% ============================================================
+\section{Notas de modelado}
+% ============================================================
+\begin{itemize}
+  \item \textbf{Desnormalización:} \texttt{animales\_by\_id} y
+        \texttt{animales\_by\_rescatista} mantienen los mismos datos del animal
+        sincronizados para soportar dos accesos distintos.
+  \item \textbf{Tablas puntero:} \texttt{consulta\_codigos\_by\_animal} y
+        \texttt{consulta\_codigos\_by\_veterinario} guardan solo el código de la
+        consulta (dato inmutable), de modo que no requieren sincronización al
+        cambiar el estado o la fecha de una consulta.
+  \item \textbf{Borrado lógico:} rescatistas, veterinarios, servicios y productos
+        usan la columna \texttt{activo} para darse de baja sin romper referencias
+        históricas.
+  \item \textbf{Comunicación entre keyspaces:} las relaciones entre servicios
+        (p.\,ej. \texttt{animal\_id} o \texttt{veterinario\_id} en
+        \texttt{consultas\_by\_codigo}) son referencias por \texttt{uuid}; no hay
+        \emph{joins}, cada microservicio es dueño de su propio keyspace.
+\end{itemize}
+
+\end{document}

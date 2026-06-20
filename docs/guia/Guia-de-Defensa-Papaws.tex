@@ -1,0 +1,624 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Codificación y tipografía ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+% --- Fuente más legible: Lato (texto sans-serif) + Inconsolata (monoespaciada) ---
+\usepackage[default]{lato}
+\usepackage[scaled=0.95]{inconsolata}
+
+% --- Diseño de página, tablas y gráficos ---
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{hyperref}
+
+% --- Colores corporativos (mismos que el resto de docs del proyecto) ---
+\definecolor{moss}{HTML}{005F73}
+\definecolor{moss2}{HTML}{0A9396}
+\definecolor{mosslight}{HTML}{D7E8E6}
+\definecolor{clay}{HTML}{BB3E03}
+\definecolor{sun}{HTML}{EE9B00}
+\definecolor{ink}{HTML}{2B2D31}
+\definecolor{codebg}{HTML}{F4F6F6}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=moss,
+  urlcolor=moss,
+  pdftitle={Guía de Defensa - Papaws},
+  pdfauthor={Equipo Papaws}
+}
+
+\titleformat{\section}{\Large\bfseries\color{moss}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{clay}}{\thesubsection}{0.6em}{}
+
+% --- Caja para rutas / código corto en línea ---
+\newtcbox{\rutabox}{on line, boxrule=0pt, boxsep=0pt, top=1pt, bottom=1pt,
+  left=3pt, right=3pt, arc=2pt, colback=codebg, fontupper=\ttfamily\small}
+
+% --- Caja de nota / idea clave ---
+\newtcolorbox{nota}{colback=mosslight, colframe=moss, boxrule=0.6pt,
+  arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+
+% --- Caja para corregir / precisar (acento naranja) ---
+\newtcolorbox{precision}{colback=sun!10, colframe=sun!80!black, boxrule=0.6pt,
+  arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+
+% --- Pregunta / respuesta / dónde mirar ---
+\newcommand{\pregunta}[1]{\par\smallskip\noindent{\color{clay}\bfseries P:\ }{\bfseries #1}\par\nobreak}
+\newcommand{\dondemirar}[1]{\par\smallskip\noindent{\footnotesize\itshape\color{moss2}\hangindent=1.2em Dónde mirar: #1}\par}
+
+% Holgura global: las rutas en \rutabox son cajas que no se cortan; esto evita que
+% se salgan al margen permitiendo estirar los espacios entre ellas.
+\sloppy
+\setlength{\emergencystretch}{3em}
+
+% --- Estilo de bloque de comandos de shell ---
+\lstdefinestyle{shell}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0pt,
+  breaklines=true, columns=fullflexible,
+  xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=6pt, belowskip=6pt,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1
+}
+
+% --- Portada simple con banda verde ---
+\newcommand{\portada}{%
+\thispagestyle{empty}
+\noindent
+\begin{tcolorbox}[colback=moss, colframe=moss, arc=3pt, left=14pt, right=14pt,
+  top=18pt, bottom=18pt]
+  {\color{white}\Huge\bfseries Guía de Defensa}\\[4pt]
+  {\color{white}\LARGE\bfseries Papaws}\\[10pt]
+  {\color{mosslight}\large Sistema de microservicios distribuidos (.NET + Cassandra + React)}
+\end{tcolorbox}
+\vspace{1.2em}
+}
+
+\begin{document}
+
+\portada
+
+% ===================================================================
+\section*{Cómo usar esta guía}
+% ===================================================================
+\addcontentsline{toc}{section}{Cómo usar esta guía}
+
+Esta guía está en formato \textbf{pregunta $\rightarrow$ respuesta}. Cada tema tiene
+primero una explicación clara del concepto y después las preguntas que te pueden
+hacer, con la respuesta lista para decir y el lugar exacto del código donde se ve.
+Búscala por sección o por palabra clave.
+
+\smallskip
+\noindent\textbf{Estructura de cada bloque:}
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item \textbf{P:} la pregunta probable del docente.
+  \item \textbf{Respuesta:} lo que conviene responder, explicado en simple.
+  \item \textit{Dónde mirar:} archivo y método para mostrarlo en vivo si lo piden.
+\end{itemize}
+
+\smallskip
+\begin{precision}
+\textbf{Precisión importante sobre el despliegue.} Donde antes esta guía hablaba de
+«una base de datos por servicio», lo correcto es «un \emph{keyspace} por servicio».
+Los dos keyspaces conviven en un \textbf{único clúster Cassandra de dos nodos} con
+\texttt{replication\_factor~=~2}: la separación entre servicios es \textbf{lógica}
+(cada servicio abre solo su keyspace), no física. Esto se detalla en las secciones
+\hyperref[sec:queries]{13} y \hyperref[sec:trampa]{15}, y \emph{refuerza} la defensa
+sobre tolerancia a fallos.
+\end{precision}
+
+\tableofcontents
+\newpage
+
+% ===================================================================
+\section{La arquitectura en una frase}
+% ===================================================================
+
+Papaws son \textbf{TRES microservicios .NET independientes} más un frontend React
+que los consume. Dos servicios tienen \textbf{keyspace propio} de Cassandra; el
+tercero (Reportes) \textbf{no tiene datos propios}. Ningún servicio entra al
+keyspace de otro: si necesita datos ajenos, los pide por la API REST.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Animales} (puerto \rutabox{8080}): rescatistas, organizaciones y
+        animales. Es el dueño de esos datos. También hace el \textbf{login} y emite
+        el \textbf{JWT}.
+  \item \textbf{Consulta} (puerto \rutabox{8081}): veterinarios, servicios,
+        productos (inventario) y consultas clínicas.
+  \item \textbf{Reportes} (puerto \rutabox{8082}): \textbf{NO} tiene datos propios.
+        Es un \textbf{AGREGADOR}: arma los reportes pidiendo datos por HTTP a los
+        otros dos.
+  \item \textbf{Front} (\rutabox{Pawpaws-Front}, React + Vite): decide a qué servicio
+        ir por una \emph{«zona»} (\texttt{animales} / \texttt{consulta}) o por la base
+        de reportes.
+\end{itemize}
+
+\pregunta{¿Por qué microservicios y no un monolito?}
+Para desacoplar dominios: cada servicio se despliega, escala y falla por separado.
+El precio a pagar es que no hay JOINs ni transacciones entre servicios; la
+consistencia se cuida a mano al escribir (sección~\ref{sec:integridad}). Es la
+decisión central a defender.
+
+\pregunta{¿Cómo sabe el front a qué microservicio pegar?}
+Cada llamada declara su \emph{«zona»}. La función \texttt{baseFor()} traduce la zona
+a la URL del servicio. Los endpoints concretos (qué ruta, qué método) están
+centralizados en un solo archivo. Reportes no es una «zona»: va por su propia
+constante (\texttt{REPORTES\_BASE}) y una función aparte.
+\dondemirar{\rutabox{Pawpaws-Front/src/api/client.ts} (\texttt{baseFor} / \texttt{apiGet} / \texttt{apiPost}) y \rutabox{Pawpaws-Front/src/api/endpoints.ts}}
+
+\pregunta{¿La regla de oro de la arquitectura?}
+Un servicio NUNCA lee ni escribe el keyspace de otro. Toda dependencia cruzada pasa
+por la API REST del dueño, reenviando el token JWT del usuario.
+
+% ===================================================================
+\section{Los tres flujos clave (quién llama a quién)}
+% ===================================================================
+
+Estas son las tres preguntas de recorrido «de punta a punta» más probables. Conviene
+poder trazarlas: \textbf{front $\rightarrow$ controlador $\rightarrow$ servicio
+$\rightarrow$ tabla de Cassandra}.
+
+\subsection{¿Dónde llaman los reportes a los rescatistas? (C1 / C2)}
+\textbf{Recorrido:}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Front}: en \rutabox{Reportes.tsx} se elige el reporte y se llama
+        \texttt{reportesApi.c1\_rescatistaPorId(id)} o
+        \texttt{c2\_animalesPorRescatista(id)}. Pegan al servicio de
+        \textbf{Reportes}, no a Animales.
+  \item \textbf{Reportes}: entra por \rutabox{RescatistasReportesController.cs} y
+        llama a \texttt{ReporteService} (\texttt{C1\_RescatistaPorIdAsync} /
+        \texttt{C2\_AnimalesPorRescatistaAsync}).
+  \item Aquí «los reportes llaman a los rescatistas»: \texttt{ReporteService} no
+        tiene base; usa el cliente HTTP \texttt{AnimalesClient.GetRescatistaByIdAsync(id)}
+        $\rightarrow$ \rutabox{GET api/rescatistas/\{id\}} contra Animales. Para C2
+        además \texttt{GetAnimalesByRescatistaAsync(id)} $\rightarrow$
+        \rutabox{GET api/animales/rescatista/\{id\}}.
+  \item \textbf{Animales} responde desde \texttt{RescatistasController}
+        $\rightarrow$ \texttt{RescatistaService}, leyendo la tabla
+        \texttt{rescatistas\_by\_id}.
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Reportes/Services/AnimalesClient.cs} y \rutabox{ReporteService.cs}; \rutabox{Pawpaws-Animales/Services/RescatistaService.cs}}
+
+\pregunta{¿Y la autenticación no se pierde al saltar de servicio?}
+No. El cliente de Reportes \textbf{reenvía} el token JWT del usuario (copia el header
+\texttt{Authorization}), así Animales sigue exigiendo login y rol. Ese reenvío está
+en el método que arma el request del cliente.
+\dondemirar{\rutabox{Pawpaws-Reportes/Services/AnimalesClient.cs} (\texttt{CrearRequest} copia \texttt{Authorization})}
+
+\subsection{¿Dónde llaman los rescatistas a los animales? (clic en «Ver ficha»)}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Front}: el botón «Ver ficha» en \rutabox{Rescatistas.tsx} navega a
+        \rutabox{/rescatistas/:id} (ruta en \texttt{App.tsx}) y la pinta
+        \rutabox{RescatistaDetalle.tsx}.
+  \item Aquí «el rescatista llama a sus animales»: \texttt{RescatistaDetalle.tsx}
+        hace \texttt{animalesApi.porRescatista(id)} $\rightarrow$
+        \rutabox{GET /api/animales/rescatista/\{id\}} contra Animales.
+  \item \textbf{Animales}: \texttt{AnimalesController.ObtenerPorRescatista}
+        $\rightarrow$ \texttt{AnimalService.ObtenerPorRescatistaAsync}, que lee la
+        tabla \texttt{animales\_by\_rescatista}.
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Front/src/pages/RescatistaDetalle.tsx}; \rutabox{Pawpaws-Animales/Services/AnimalService.cs}}
+
+\pregunta{¿Por qué existe una tabla \texttt{animales\_by\_rescatista} aparte de \texttt{animales\_by\_id}?}
+Está \textbf{desnormalizada} y \textbf{particionada} por \texttt{rescatista\_id}
+justo para que «dame todos los animales de este rescatista» sea UNA sola lectura de
+una partición, sin JOIN ni scan. El mismo animal se guarda también en
+\texttt{animales\_by\_id} para buscarlo por su propio id. Ambas se escriben juntas en
+un \texttt{BatchStatement} para que no se desincronicen.
+\dondemirar{\rutabox{Pawpaws-Animales/Data/CassandraSchema.cs} y \texttt{GuardarAnimalAsync} en \rutabox{AnimalService.cs}}
+
+\subsection{¿Dónde llaman los animales a sus consultas?}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Front}: \rutabox{AnimalDetalle.tsx} hace
+        \texttt{consultasApi.porAnimal(id)} $\rightarrow$
+        \rutabox{GET /api/consultas/animal/\{id\}} contra el servicio de
+        \textbf{Consulta} (las consultas viven en otro microservicio).
+  \item \textbf{Consulta}: \texttt{ConsultasController.ObtenerPorAnimal}
+        $\rightarrow$ \texttt{ConsultaService.ObtenerPorAnimalAsync}.
+  \item \textbf{En Cassandra}: primero lee la tabla índice
+        \texttt{consulta\_codigos\_by\_animal} (particionada por \texttt{animal\_id})
+        para sacar los códigos; luego trae cada consulta de
+        \texttt{consultas\_by\_codigo}. Es el patrón «tabla índice + lectura por
+        clave».
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Front/src/pages/AnimalDetalle.tsx}; \rutabox{Pawpaws-Consulta/Services/ConsultaService.cs}}
+
+\pregunta{Si el animal y la consulta están en servicios distintos, ¿cómo se relacionan sin foreign key?}
+La consulta guarda el \texttt{animal\_id}. No hay FK que cruce servicios; la relación
+se sostiene por ese id y la consistencia se cuida al CREAR la consulta, validando el
+animal por HTTP (sección~\ref{sec:integridad}).
+
+% ===================================================================
+\section{Modelado en Cassandra (query-first)}
+% ===================================================================
+
+Cassandra no hace JOINs ni filtra eficiente por columnas que no sean la clave de
+partición. Por eso se modela «una tabla por consulta de lectura» (\emph{query-first})
+y el mismo dato se guarda varias veces (\emph{desnormalización}). La clave de
+partición define dónde vive el dato y por qué campo se puede leer rápido.
+
+\smallskip
+\noindent\textbf{Ejemplos en el sistema:}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Animales}: \texttt{animales\_by\_id} (por id) y
+        \texttt{animales\_by\_rescatista} (por rescatista).
+  \item \textbf{Consultas}: \texttt{consultas\_by\_codigo} (por código);
+        \texttt{consulta\_codigos\_by\_animal} y
+        \texttt{consulta\_codigos\_by\_veterinario} (índices para listar);
+        \texttt{consulta\_servicios\_by\_codigo} y
+        \texttt{consulta\_productos\_by\_codigo} (relaciones de la consulta).
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Animales/Data/CassandraSchema.cs} y \rutabox{Pawpaws-Consulta/Data/CassandraSchema.cs}}
+
+\pregunta{¿Y si quiero saber en qué consultas se usó un servicio? (consulta inversa)}
+No se puede con \texttt{consulta\_servicios\_by\_codigo}, porque esa tabla está
+particionada por código (solo responde «qué servicios tiene ESTA consulta»). Por eso
+se agregó una tabla de \textbf{índice inverso}, \texttt{consulta\_codigos\_by\_servicio},
+particionada por \texttt{servicio\_id}, que se mantiene sincronizada al crear, editar
+y borrar una consulta. La usa la ficha de servicio.
+\dondemirar{\texttt{ObtenerPorServicioAsync} y los \texttt{INSERT}/\texttt{DELETE} del índice en \rutabox{Pawpaws-Consulta/Services/ConsultaService.cs}}
+
+\pregunta{¿No es peligroso duplicar datos?}
+El riesgo es la desincronización. Se controla escribiendo TODAS las copias en la
+misma operación (\texttt{BatchStatement}) para que entren juntas, y manteniendo los
+índices en cada alta/baja/edición.
+
+% ===================================================================
+\section{Trazabilidad e historial (eventos inmutables)}
+% ===================================================================
+
+Para no perder historia, los cambios se guardan como \textbf{eventos inmutables} en
+tablas ordenadas por fecha descendente (\emph{clustering}). En vez de pisar un valor,
+se agrega un evento nuevo.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{eventos\_custodia\_by\_animal}: ingreso del animal y cada
+        reasignación entre rescatistas.
+  \item \texttt{eventos\_organizacion\_by\_rescatista}: alta y cambios de
+        organización del rescatista.
+  \item \texttt{eventos\_adopcion\_by\_animal}: adopciones y devoluciones.
+\end{itemize}
+\dondemirar{Tablas y \emph{backfill} en \rutabox{Pawpaws-Animales/Data/CassandraSchema.cs}; registro en \texttt{AnimalService.cs} y \texttt{RescatistaService.cs}; líneas de tiempo en \texttt{AnimalDetalle.tsx} y \texttt{RescatistaDetalle.tsx}}
+
+\pregunta{¿Por qué el evento guarda el nombre y no solo el id?}
+Para que el historial siga siendo legible aunque después se dé de baja ese rescatista
+u organización. Si guardara solo el id, al borrarse quedaría un id muerto sin
+sentido. Es un \emph{«snapshot»} del nombre en el momento del evento.
+
+\pregunta{¿Qué es el backfill?}
+Un proceso \textbf{idempotente} que siembra los eventos iniciales para los datos que
+ya existían antes de tener el historial, sin duplicar si se corre dos veces.
+
+% ===================================================================
+\section{Integridad entre servicios (sin foreign keys)}
+\label{sec:integridad}
+% ===================================================================
+
+Como cada servicio tiene su keyspace, no hay claves foráneas que crucen servicios.
+La consistencia se cuida al \textbf{ESCRIBIR}:
+\begin{itemize}[leftmargin=1.4em]
+  \item Al crear una consulta, Consulta valida el animal \textbf{llamando por HTTP} a
+        Animales (con reintentos). Si el animal no existe, rechaza.
+  \item Esa misma validación trae el \textbf{estado} del animal y rechaza agendar si
+        está «Adoptado» (un adoptado no recibe consultas hasta que se registre su
+        devolución).
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Consulta/Services/AnimalReferenceService.cs} (\texttt{ObtenerEstadoAsync}) usado en \texttt{CrearAsync} de \rutabox{ConsultaService.cs}}
+
+\pregunta{¿Y si el servicio de Animales está caído cuando creo la consulta?}
+El cliente reintenta con \emph{backoff}. Si aun así no hay respuesta, la creación
+\textbf{FALLA} con un error controlado, en lugar de crear una consulta que apunte a un
+animal que no se pudo verificar. Se prefiere fallar a dejar datos inconsistentes.
+
+\pregunta{¿Cómo se borra un animal sin dejar consultas huérfanas?}
+El animal se borra \textbf{físicamente} y, en cascada, se borran sus consultas. Si la
+baja de la cascada falla, se propaga el error y el animal NO se borra, para no dejar
+consultas apuntando a un animal inexistente.
+\dondemirar{\texttt{EliminarAsync} en \rutabox{Pawpaws-Animales/Services/AnimalService.cs} (cascada cross-servicio)}
+
+% ===================================================================
+\section{Concurrencia: el stock de productos (LWT)}
+% ===================================================================
+
+Si dos consultas descuentan stock del mismo producto a la vez, un \texttt{UPDATE}
+normal podría pisar el valor del otro (\emph{lost update}). Se resolvió con
+\textbf{compare-and-set} usando \textbf{LWT} (transacciones ligeras) de Cassandra:
+\rutabox{UPDATE ... IF stock\_disponible = ?}. Si otro proceso cambió el stock
+entremedio, el \texttt{IF} falla, se lee el valor real que devuelve Cassandra y se
+reintenta.
+\dondemirar{\texttt{AjustarStockAsync} en \rutabox{Pawpaws-Consulta/Services/ProductoService.cs}}
+
+\pregunta{¿Por qué no usar solo un UPDATE común?}
+Porque dos \texttt{UPDATE} concurrentes no se enteran uno del otro: el último gana y
+se pierde un descuento. El LWT agrega una condición (\texttt{IF}) que solo aplica si
+el valor sigue siendo el que leí; si cambió, reintento con el valor nuevo. Es control
+de concurrencia \textbf{optimista}.
+
+\pregunta{¿Es caro el LWT?}
+Sí, más que un \emph{write} normal porque usa consenso (Paxos) entre réplicas. Se
+justifica solo donde hay riesgo real de carrera, como el stock. No se usa para todo.
+
+% ===================================================================
+\section{Gastos y precios (refugio sin fines de lucro)}
+% ===================================================================
+
+El reporte de gastos lo calcula \textbf{el servicio de Consulta}, porque ahí viven los
+precios: \texttt{precio\_base} de los servicios y \texttt{costo\_unitario} de los
+productos. Por cada consulta suma el costo de sus servicios más el de los productos
+consumidos (\texttt{costo\_unitario}~$\times$~cantidad). El front lo agrupa por mes.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Endpoint}: \rutabox{GET /api/consultas/gastos}
+        (\texttt{ObtenerGastosAsync} en \texttt{ConsultaService.cs}).
+  \item Las consultas \textbf{canceladas} se EXCLUYEN: devuelven el stock y no
+        representan gasto real.
+  \item Los precios son en bolivianos (Bs) y a precio de costo, porque es un refugio
+        sin fines de lucro: no hay margen comercial.
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Consulta/Services/ConsultaService.cs} (\texttt{ObtenerGastosAsync}); \rutabox{Pawpaws-Front/src/pages/Gastos.tsx}}
+
+\pregunta{¿Por qué el cálculo de gastos no está en Reportes?}
+Porque todos los datos necesarios (precio de servicios y costo de productos) viven en
+Consulta. Calcularlo ahí evita que Reportes tenga que pedir y recombinar todo por
+HTTP: se hace donde están los datos.
+
+\pregunta{¿Por qué los números se muestran sin punto de miles?}
+Decisión de formato: el punto se reserva para decimales. La moneda se muestra como
+«Bs» con el locale \texttt{es-BO} y agrupación desactivada, para que no se confunda
+\texttt{1.000} (mil) con \texttt{1,000} (uno coma cero).
+
+% ===================================================================
+\section{Refugio y cupo de rescatistas}
+% ===================================================================
+
+Existe un rescatista interno llamado \textbf{«Refugio»} (oculto de la gestión) que
+actúa como destino institucional de los animales. Cada rescatista normal tiene un
+\textbf{cupo máximo} de animales; el Refugio no tiene límite.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item Al dar de baja un rescatista, sus animales se reasignan: llenan el cupo del
+        rescatista elegido y lo que sobra se deriva automáticamente al Refugio.
+  \item Al reasignar un animal suelto, se bloquea si el rescatista destino ya está en
+        su cupo. Así se reparten los animales del Refugio sin sobrecargar a nadie.
+\end{itemize}
+\dondemirar{\texttt{ReasignarAnimalesAsync} y la validación de cupo en \texttt{ActualizarAsync} de \rutabox{Pawpaws-Animales/Services/AnimalService.cs}; constante \texttt{CapacidadMaxima} en \rutabox{Models/Rescatista.cs}}
+
+\pregunta{¿Por qué no asignar todos los animales a un solo rescatista al dar de baja?}
+Porque un rescatista no puede hacerse cargo de más animales de los que su cupo
+permite. El sistema respeta ese límite y manda el excedente al Refugio, desde donde
+luego se reparten de a poco a quienes tengan lugar.
+
+% ===================================================================
+\section{Seguridad: JWT y roles}
+% ===================================================================
+
+Login con \textbf{JWT} y autorización por \textbf{roles} (Administrador, Encargado de
+consultas, Encargado de rescatistas). Cada endpoint se protege con
+\rutabox{[Authorize(Roles = ...)]}. Cuando un servicio llama a otro, \textbf{reenvía}
+el token del usuario, así la autorización se respeta en toda la cadena.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item El secreto de firma del JWT y la contraseña NO están en el repositorio: se
+        leen de variables de entorno / \emph{user-secrets}, y \texttt{appsettings.json}
+        queda en blanco (\emph{fail-fast} si faltan).
+  \item La misma clave de firma es idéntica en los tres servicios: Animales firma,
+        los demás validan.
+\end{itemize}
+\dondemirar{Carpetas \rutabox{Security/} de cada servicio; emisión del token en Pawpaws-Animales (\texttt{AuthController} / \texttt{JwtService})}
+
+\pregunta{¿Cómo respeta Reportes los permisos si no tiene los usuarios?}
+No necesita la base de usuarios: confía en el JWT firmado. Valida la firma con la
+clave compartida y lee los roles del token. Además reenvía ese token a
+Animales/Consulta, que vuelven a validar.
+
+% ===================================================================
+\section{Reglas de negocio}
+% ===================================================================
+
+Ejemplos concretos que conviene tener a mano:
+\begin{itemize}[leftmargin=1.4em]
+  \item Una consulta no puede nacer «Completada».
+  \item Un animal «Adoptado» solo puede pasar a «Devuelto al refugio», no directo a
+        «Disponible».
+  \item No se permiten productos (ni organizaciones) con nombre repetido entre los
+        activos.
+  \item La fecha de ingreso de un animal no puede ser futura.
+  \item Un rescatista no puede superar su cupo de animales (sección~\ref{sec:integridad}
+        y «Refugio y cupo»).
+\end{itemize}
+
+\pregunta{¿Borrado físico o lógico?}
+Rescatistas, veterinarios, servicios, productos y organizaciones usan \textbf{borrado
+lógico} (\texttt{activo = false}) para no romper referencias históricas. Los animales
+SÍ se borran físicamente, y al hacerlo se borran en cascada sus consultas.
+
+% ===================================================================
+\section{Paginación}
+% ===================================================================
+
+Hay paginación en \textbf{dos niveles}. En el \textbf{backend}, los listados aceptan
+\rutabox{?pagina=} y \rutabox{?tamano=} y devuelven un objeto con los ítems de esa
+página. En el \textbf{front}, además, las listas largas se paginan del lado del
+cliente: 10 elementos por página con controles numerados (1, 2, 3\ldots).
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Backend}: helper \texttt{Paginar()} y un tamaño por defecto; el front
+        pide la primera página con tamaño alto.
+  \item \textbf{Front}: hook \texttt{usePaginated} y componente \texttt{Pagination},
+        aplicados a animales, productos, rescatistas, servicios, veterinarios,
+        organizaciones, consultas y gastos.
+\end{itemize}
+\dondemirar{\texttt{apiList} en \rutabox{Pawpaws-Front/src/api/client.ts}; \rutabox{Pawpaws-Front/src/hooks/usePaginated.ts} y \rutabox{components/Pagination.tsx}; \rutabox{Common/Paginacion.cs} en cada servicio}
+
+\pregunta{¿Por qué paginar también en el front si el backend ya pagina?}
+Porque el front trae la lista y la filtra/ordena en memoria para una UX fluida;
+paginar ahí evita renderizar listas gigantes de cientos de tarjetas. Son dos
+optimizaciones que se complementan.
+
+% ===================================================================
+\section{Reportes (el servicio agregador)}
+% ===================================================================
+
+Reportes no tiene base propia: cada reporte combina llamadas HTTP a Animales y/o
+Consulta. El ejemplo más completo es \textbf{C20} («Rescatistas y animales por
+organización»): pide la organización, luego sus rescatistas, y para CADA rescatista
+sus animales; el «join» organización $\rightarrow$ rescatistas $\rightarrow$ animales
+se arma \textbf{en memoria} en el servicio de Reportes, porque los datos viven en
+servicios distintos.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item Un reporte útil de rendimiento es el \textbf{ranking de veterinarios por
+        cantidad de consultas (C22)}, paginado.
+\end{itemize}
+\dondemirar{\rutabox{Pawpaws-Reportes/Services/ReporteService.cs} (\texttt{C20\_OrganizacionDetalleAsync}, \texttt{C22\_VeterinariosPorConsultasAsync})}
+
+\pregunta{¿Y los datos huérfanos en los reportes?}
+Se resuelven los nombres a prueba de huérfanos: si una consulta apunta a un
+veterinario dado de baja se muestra «(dado de baja)», y si ya no existe,
+«(eliminado)», nunca un GUID suelto.
+\dondemirar{\texttt{ResolverNombresVetAsync} / \texttt{ResolverNombresAnimalAsync} en \rutabox{ReporteService.cs}}
+
+\pregunta{¿Por qué el listado de consultas no trae servicios ni productos?}
+Para evitar un problema \textbf{N+1} caro en una lista. El listado es liviano; los
+servicios y productos se cargan solo al abrir el detalle de una consulta.
+\dondemirar{\texttt{ObtenerPorCodigoAsync} en \rutabox{Pawpaws-Consulta/Services/ConsultaService.cs}}
+
+% ===================================================================
+\section{Ver las queries reales en Cassandra}
+\label{sec:queries}
+% ===================================================================
+
+Cassandra se despliega como un \textbf{único clúster} (\texttt{papaws-cluster}) de
+\textbf{dos nodos} en contenedores Docker: \texttt{papaws-cassandra-animales}
+(puerto \rutabox{9042}) y \texttt{papaws-cassandra-consulta} (puerto \rutabox{9142}).
+Ambos comparten \texttt{cluster\_name} y \texttt{seeds}, así que forman un solo
+anillo. Conviven dos keyspaces —\texttt{papaws\_animales} y \texttt{papaws\_consulta}—
+y como ambos usan \texttt{replication\_factor = 2}, \textbf{cada keyspace está
+replicado en los dos nodos}. La separación entre servicios es \textbf{lógica} (cada
+servicio abre solo su keyspace), no física. Cassandra NO loguea cada query por
+defecto; para «verlas» se activa \textbf{TRACING}.
+
+\begin{nota}
+\textbf{Implicación de la réplica.} Como los dos servicios declaran ambos nodos como
+\emph{contact points} y cada keyspace tiene una copia en cada nodo (RF~=~2), la caída
+de \textbf{un} nodo no tumba a nadie: el otro nodo responde. Esto se usa en la
+respuesta sobre el punto único de falla (sección~\ref{sec:trampa}).
+\end{nota}
+
+\subsection{Forma A — Una query puntual (cqlsh)}
+\begin{lstlisting}[style=shell]
+docker exec -it papaws-cassandra-animales cqlsh
+USE papaws_animales;
+TRACING ON;
+SELECT * FROM animales_by_rescatista WHERE rescatista_id = <uuid>;
+\end{lstlisting}
+
+\subsection{Forma B — Capturar TODAS las queries (la que más sirve)}
+\begin{lstlisting}[style=shell]
+# Activar el tracing al 100%
+docker exec papaws-cassandra-animales nodetool settraceprobability 1
+
+# Usar la app (abrir una ficha, generar un reporte) y luego leer las trazas:
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT started_at, request, parameters FROM system_traces.sessions LIMIT 50;"
+
+# APAGARLO al terminar (al 100% es caro):
+docker exec papaws-cassandra-animales nodetool settraceprobability 0
+\end{lstlisting}
+\noindent La columna \texttt{parameters} trae el CQL real.
+
+\subsection{Forma C — Inspeccionar datos directos (demostrar la desnormalización)}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT * FROM papaws_animales.animales_by_rescatista LIMIT 20;"
+
+# Ver todas las tablas con su clave de partición y clustering:
+docker exec papaws-cassandra-animales cqlsh -e "DESCRIBE KEYSPACE papaws_animales;"
+\end{lstlisting}
+
+\subsection{Forma D — Logs}
+\begin{lstlisting}[style=shell]
+docker logs -f papaws-animales   # requests HTTP que llegan al microservicio .NET
+\end{lstlisting}
+\noindent Cruzado con la Forma B muestra el camino completo: request HTTP
+$\rightarrow$ servicio $\rightarrow$ query a Cassandra.
+
+% ===================================================================
+\section{Resumen: quién llama a quién}
+% ===================================================================
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Front $\rightarrow$ Animales}: rescatistas, organizaciones, animales
+        y sus historiales.
+  \item \textbf{Front $\rightarrow$ Consulta}: veterinarios, servicios, productos,
+        consultas y gastos.
+  \item \textbf{Front $\rightarrow$ Reportes}: todos los reportes.
+  \item \textbf{Consulta $\rightarrow$ Animales} (HTTP): solo para validar el animal y
+        su estado al crear una consulta.
+  \item \textbf{Reportes $\rightarrow$ Animales} y \textbf{Reportes $\rightarrow$
+        Consulta} (HTTP): para armar cada reporte combinando datos.
+  \item \textbf{Ningún servicio entra al keyspace de otro}: siempre por la API REST,
+        con el token JWT reenviado.
+\end{itemize}
+
+% ===================================================================
+\section{Preguntas trampa y cómo salir bien}
+\label{sec:trampa}
+% ===================================================================
+
+\pregunta{¿Esto es realmente distribuido o son tres apps cualquiera?}
+Es distribuido: tres servicios desplegables por separado, con \textbf{keyspaces
+independientes}, comunicados por red (HTTP/REST), con fallas y consistencia
+gestionadas explícitamente (reintentos, validación al escribir, eventos). No
+comparten datos lógicos ni memoria.
+
+\pregunta{¿No es contradictorio decir «bases independientes» si comparten clúster?}
+No, hay que distinguir dos planos. A nivel \textbf{lógico} cada servicio tiene su
+propio keyspace y solo abre ese (separación de datos y de dominio real). A nivel
+\textbf{físico} los dos keyspaces viven en el mismo clúster de dos nodos por
+simplicidad de despliegue; nada impide ponerlos en clústeres separados sin tocar el
+código, porque la frontera real es el keyspace, no el contenedor.
+
+\pregunta{¿Qué pasa si dos servicios se desincronizan (un id que ya no existe)?}
+Se asume y se maneja: los reportes resuelven nombres a prueba de huérfanos, y las
+escrituras críticas validan antes de crear. La consistencia es \textbf{eventual} y
+defendida en cada punto de escritura.
+
+\pregunta{¿Por qué Cassandra y no PostgreSQL?}
+Por escala de escritura y disponibilidad: Cassandra reparte por particiones y no
+depende de un único nodo. El costo es modelar \emph{query-first} y desnormalizar, que
+es justamente lo que mostramos.
+
+\pregunta{¿Dónde está el punto único de falla?}
+A nivel de aplicación cada servicio y cada keyspace son independientes. A nivel
+físico, los dos keyspaces viven en el mismo clúster Cassandra de dos nodos con
+\texttt{replication\_factor = 2}: por eso la caída de \textbf{un} nodo no tumba a
+nadie (el otro nodo tiene una copia y ambos servicios tienen los dos nodos como
+\emph{contact points}). Si el \emph{servicio} de Animales cae, Consulta no puede crear
+consultas nuevas (porque valida el animal) pero el resto sigue; la caída se traduce en
+un error controlado, no en datos corruptos.
+
+\pregunta{¿Cómo demuestro en vivo que un servicio no toca el keyspace de otro?}
+Mostrando que Reportes no tiene cadena de conexión a ninguna base (solo clientes
+HTTP) y que cada keyspace solo lo abre su propio servicio
+(\texttt{ConnectAsync(keyspace)} con su propio keyspace en cada \texttt{Program.cs}).
+Con la Forma B del tracing se ve que las queries del keyspace
+\texttt{papaws\_consulta} solo las origina el servicio de Consulta.
+
+\vspace{1.5em}
+\begin{center}\small\itshape
+Guía de defensa del proyecto Papaws.\\
+Complementaria a «Funcionamiento del proyecto Papaws» y «Esquema de tablas en Cassandra».
+\end{center}
+
+\end{document}

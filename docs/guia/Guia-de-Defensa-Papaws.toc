@@ -1,0 +1,24 @@
+\babel@toc {spanish}{}\relax 
+\contentsline {section}{Cómo usar esta guía}{1}{Doc-Start}%
+\contentsline {section}{\numberline {1}La arquitectura en una frase}{3}{section.1}%
+\contentsline {section}{\numberline {2}Los tres flujos clave (quién llama a quién)}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}¿Dónde llaman los reportes a los rescatistas? (C1 / C2)}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}¿Dónde llaman los rescatistas a los animales? (clic en «Ver ficha»)}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}¿Dónde llaman los animales a sus consultas?}{4}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Modelado en Cassandra (query-first)}{4}{section.3}%
+\contentsline {section}{\numberline {4}Trazabilidad e historial (eventos inmutables)}{5}{section.4}%
+\contentsline {section}{\numberline {5}Integridad entre servicios (sin foreign keys)}{5}{section.5}%
+\contentsline {section}{\numberline {6}Concurrencia: el stock de productos (LWT)}{6}{section.6}%
+\contentsline {section}{\numberline {7}Gastos y precios (refugio sin fines de lucro)}{6}{section.7}%
+\contentsline {section}{\numberline {8}Refugio y cupo de rescatistas}{6}{section.8}%
+\contentsline {section}{\numberline {9}Seguridad: JWT y roles}{7}{section.9}%
+\contentsline {section}{\numberline {10}Reglas de negocio}{7}{section.10}%
+\contentsline {section}{\numberline {11}Paginación}{8}{section.11}%
+\contentsline {section}{\numberline {12}Reportes (el servicio agregador)}{8}{section.12}%
+\contentsline {section}{\numberline {13}Ver las queries reales en Cassandra}{8}{section.13}%
+\contentsline {subsection}{\numberline {13.1}Forma A — Una query puntual (cqlsh)}{9}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}Forma B — Capturar TODAS las queries (la que más sirve)}{9}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}Forma C — Inspeccionar datos directos (demostrar la desnormalización)}{9}{subsection.13.3}%
+\contentsline {subsection}{\numberline {13.4}Forma D — Logs}{9}{subsection.13.4}%
+\contentsline {section}{\numberline {14}Resumen: quién llama a quién}{9}{section.14}%
+\contentsline {section}{\numberline {15}Preguntas trampa y cómo salir bien}{9}{section.15}%
