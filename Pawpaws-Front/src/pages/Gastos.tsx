@@ -13,10 +13,11 @@ import { consultasApi, animalesApi } from "../api/endpoints";
 import { descargarPdf, SeccionPdf } from "../utils/pdf";
 import type { GastoConsulta } from "../types";
 
-const fmt = new Intl.NumberFormat("es-CO", {
+const fmt = new Intl.NumberFormat("es-BO", {
   style: "currency",
-  currency: "COP",
+  currency: "BOB",
   maximumFractionDigits: 0,
+  useGrouping: false,
 });
 
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];

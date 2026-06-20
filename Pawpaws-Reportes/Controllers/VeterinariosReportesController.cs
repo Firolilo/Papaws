@@ -48,4 +48,14 @@ public class VeterinariosReportesController : ControllerBase
         var resultado = await _reporteService.C13_VeterinariosPorEspecialidadAsync(especialidad);
         return Ok(resultado.AsReadOnly().Paginar(pagina, tamano));
     }
+
+    /// <summary>C22: Ranking de veterinarios por cantidad de consultas atendidas.</summary>
+    [HttpGet("ranking-consultas")]
+    public async Task<IActionResult> C22_VeterinariosPorConsultas(
+        [FromQuery] int pagina = 1,
+        [FromQuery] int tamano = Paginacion.TamanoPorDefecto)
+    {
+        var resultado = await _reporteService.C22_VeterinariosPorConsultasAsync();
+        return Ok(resultado.AsReadOnly().Paginar(pagina, tamano));
+    }
 }

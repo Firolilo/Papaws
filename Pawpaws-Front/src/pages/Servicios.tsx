@@ -19,10 +19,11 @@ const emptyForm: CrearServicioDto = {
   precioBase: 0,
 };
 
-const fmt = new Intl.NumberFormat("es-CO", {
+const fmt = new Intl.NumberFormat("es-BO", {
   style: "currency",
-  currency: "COP",
+  currency: "BOB",
   maximumFractionDigits: 0,
+  useGrouping: false,
 });
 
 export function Servicios() {

@@ -21,6 +21,9 @@ const emptyForm: CrearRescatistaDto = {
   zonaOperacion: "",
 };
 
+// Cupo máximo de animales por rescatista (debe coincidir con Rescatista.CapacidadMaxima del backend).
+const MAX_POR_RESCATISTA = 3;
+
 export function Rescatistas() {
   const { puedeGestionarAnimales } = useAuth();
   const toast = useToast();
@@ -69,11 +72,20 @@ export function Rescatistas() {
       visibles
         .filter((r) => r.id !== toDelete?.id)
         .map((r) => ({
+          r,
+          libre: Math.max(
+            0,
+            MAX_POR_RESCATISTA - (animalesPorRescatista.get(r.id) ?? 0)
+          ),
+        }))
+        // Los que tienen más cupo libre aparecen primero.
+        .sort((a, b) => b.libre - a.libre)
+        .map(({ r, libre }) => ({
           value: r.id,
           label: r.nombreCompleto,
-          hint: r.organizacion,
+          hint: `${r.organizacion} · cupo ${libre}/${MAX_POR_RESCATISTA}`,
         })),
-    [visibles, toDelete]
+    [visibles, toDelete, animalesPorRescatista]
   );
 
   function openDelete(r: Rescatista) {
@@ -93,10 +105,18 @@ export function Rescatistas() {
     setDeleteError(null);
     try {
       const nombre = toDelete.nombreCompleto;
-      await rescatistasApi.remove(toDelete.id, reasignarA || undefined);
-      toast.success(`Se eliminó a ${nombre} y se reasignaron sus animales.`);
+      const res = await rescatistasApi.remove(toDelete.id, reasignarA || undefined);
+      const partes: string[] = [];
+      if (res.alDestino > 0) partes.push(`${res.alDestino} a ${res.nombreDestino}`);
+      if (res.alRefugio > 0) partes.push(`${res.alRefugio} al Refugio`);
+      toast.success(
+        partes.length > 0
+          ? `Se dio de baja a ${nombre}. Animales reasignados: ${partes.join(" y ")}.`
+          : `Se dio de baja a ${nombre}.`
+      );
       setToDelete(null);
       reload();
+      animales.reload();
     } catch (err: any) {
       setDeleteError(err.message);
     } finally {
@@ -375,8 +395,11 @@ export function Rescatistas() {
                       emptyText="No hay rescatistas"
                     />
                     <p className="text-xs text-ink-500">
-                      Si no eliges ninguno, los animales pasarán al{" "}
-                      <strong>Refugio</strong>.
+                      Cada rescatista admite hasta{" "}
+                      <strong>{MAX_POR_RESCATISTA} animales</strong>. Si eliges
+                      uno que no tenga cupo para todos, o no eliges ninguno, el
+                      resto pasará automáticamente al <strong>Refugio</strong>,
+                      desde donde podrás repartirlos luego.
                     </p>
                   </>
                 ) : (

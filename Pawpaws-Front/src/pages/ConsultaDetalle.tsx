@@ -886,7 +886,7 @@ export function ConsultaDetalle() {
                         >
                           <span className="text-ink-700">{s.nombre}</span>
                           <span className="font-mono text-[12.5px] text-ink-500 whitespace-nowrap">
-                            ${Number(s.precioBase).toLocaleString("es")}
+                            Bs {Number(s.precioBase).toLocaleString("es", { useGrouping: false })}
                           </span>
                         </li>
                       ))}
@@ -896,7 +896,7 @@ export function ConsultaDetalle() {
                         Total
                       </span>
                       <span className="font-display text-xl text-moss-800">
-                        ${costoTotal.toLocaleString("es")}
+                        Bs {costoTotal.toLocaleString("es", { useGrouping: false })}
                       </span>
                     </div>
                   </>

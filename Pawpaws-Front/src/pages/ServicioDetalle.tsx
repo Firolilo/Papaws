@@ -14,10 +14,11 @@ import { PageHeader } from "../components/PageHeader";
 import { useFetch } from "../hooks/useFetch";
 import { consultasApi, serviciosApi } from "../api/endpoints";
 
-const fmt = new Intl.NumberFormat("es-CO", {
+const fmt = new Intl.NumberFormat("es-BO", {
   style: "currency",
-  currency: "COP",
+  currency: "BOB",
   maximumFractionDigits: 0,
+  useGrouping: false,
 });
 
 function formatFechaHora(iso: string): string {

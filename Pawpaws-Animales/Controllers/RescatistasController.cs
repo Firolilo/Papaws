@@ -69,7 +69,8 @@ public class RescatistasController : ControllerBase
     }
 
     // Al eliminar un rescatista, sus animales se reasignan a otro rescatista (parámetro
-    // reasignarA). Si no se indica, van al rescatista interno "Refugio".
+    // reasignarA). Si no se indica, van al rescatista interno "Refugio". Si el destino elegido
+    // no tiene cupo para todos, el excedente se deriva automáticamente al Refugio.
     [Authorize(Roles = Roles.GestionAnimales)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Eliminar(Guid id, [FromQuery] Guid? reasignarA = null)
@@ -84,12 +85,17 @@ public class RescatistasController : ControllerBase
             return BadRequest(new { mensaje = "El rescatista destino no existe o está dado de baja." });
 
         // Primero reasignamos los animales (no pueden quedar sin rescatista), luego damos de baja.
-        await _animalService.ReasignarAnimalesAsync(id, destinoId);
+        var reasignacion = await _animalService.ReasignarAnimalesAsync(id, destinoId);
 
         var eliminado = await _rescatistaService.EliminarAsync(id);
         if (!eliminado)
             return NotFound(new { mensaje = "Rescatista no encontrado." });
 
-        return NoContent();
+        return Ok(new
+        {
+            alDestino = reasignacion.AlDestino,
+            alRefugio = reasignacion.AlRefugio,
+            nombreDestino = destino.NombreCompleto
+        });
     }
 }

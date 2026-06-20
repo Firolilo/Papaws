@@ -71,16 +71,17 @@ public class SeedController : ControllerBase
         // índices: 0-Consulta General · 1-Vacunación · 2-Cirugía Menor
         //          3-Limpieza Dental  · 4-Examen Sangre · 5-Desparasitación
         //          6-Rx Torácico · 7-Ecografía
+        // Precios en bolivianos (Bs). Centro sin fines de lucro: cubren costos, no buscan ganancia.
         var serviciosData = new (string Nombre, string Desc, int Min, decimal Precio)[]
         {
-            ("Consulta General",   "Revisión y diagnóstico inicial",                30,  15000m),
-            ("Vacunación",         "Aplicación de vacunas preventivas",             20,  25000m),
-            ("Cirugía Menor",      "Procedimientos quirúrgicos menores",           90,  80000m),
-            ("Limpieza Dental",    "Profilaxis dental con ultrasonido",             60,  45000m),
-            ("Examen de Sangre",   "Hemograma completo y bioquímica",              15,  30000m),
-            ("Desparasitación",    "Control antiparasitario interno y externo",    25,  18000m),
-            ("Rx Torácico",        "Radiografía de tórax digital",                 20,  55000m),
-            ("Ecografía",          "Ultrasonido abdominal diagnóstico",            40,  70000m),
+            ("Consulta General",   "Revisión y diagnóstico inicial",                30,  30m),
+            ("Vacunación",         "Aplicación de vacunas preventivas",             20,  40m),
+            ("Cirugía Menor",      "Procedimientos quirúrgicos menores",           90, 250m),
+            ("Limpieza Dental",    "Profilaxis dental con ultrasonido",             60, 150m),
+            ("Examen de Sangre",   "Hemograma completo y bioquímica",              15,  80m),
+            ("Desparasitación",    "Control antiparasitario interno y externo",    25,  25m),
+            ("Rx Torácico",        "Radiografía de tórax digital",                 20, 120m),
+            ("Ecografía",          "Ultrasonido abdominal diagnóstico",            40, 150m),
         };
 
         var serviciosExistentes = (await _servicioService.ObtenerTodosAsync())
@@ -92,6 +93,14 @@ public class SeedController : ControllerBase
         {
             if (serviciosExistentes.TryGetValue(nombre, out var existenteId))
             {
+                // Servicio ya sembrado: actualizar sus datos (precio en Bs incluido).
+                await _servicioService.ActualizarAsync(existenteId, new ActualizarServicioDto
+                {
+                    Nombre                  = nombre,
+                    Descripcion             = desc,
+                    DuracionEstimadaMinutos = min,
+                    PrecioBase              = precio,
+                });
                 servicioIds.Add(existenteId);
                 continue;
             }
@@ -106,28 +115,40 @@ public class SeedController : ControllerBase
         }
 
         // ── Productos ─────────────────────────────────────────────────────────
+        // Costo unitario en bolivianos (Bs), a precio de insumo (sin margen comercial).
         var productosData = new (string Nombre, string Tipo, string Unidad, int Stock, decimal Costo)[]
         {
-            ("Amoxicilina 250mg",    "Medicamento",   "Comprimido",  45,   850m),
-            ("Ibuprofeno Vet.",      "Medicamento",   "Comprimido",  30,   600m),
-            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12,  4200m),
-            ("Jeringa 5ml",          "Material",      "Unidad",     150,   300m),
-            ("Algodón Estéril",      "Material",      "Rollo",        8,  2500m),
-            ("Bisturí #22",          "Instrumental",  "Unidad",       3,  1800m),
-            ("Ivermectina 1%",       "Medicamento",   "ml",          20,  1200m),
-            ("Sutura 3/0",           "Material",      "Unidad",      35,  3500m),
-            ("Guantes Estériles M",  "Material",      "Par",         80,   450m),
-            ("Suero Fisiológico",    "Líquido",       "Frasco",       5,  2800m),
+            ("Amoxicilina 250mg",    "Medicamento",   "Comprimido",  45,    3m),
+            ("Ibuprofeno Vet.",      "Medicamento",   "Comprimido",  30,    2m),
+            ("Vitaminas A+D",        "Suplemento",    "Frasco",      12,   35m),
+            ("Jeringa 5ml",          "Material",      "Unidad",     150,    2m),
+            ("Algodón Estéril",      "Material",      "Rollo",        8,   15m),
+            ("Bisturí #22",          "Instrumental",  "Unidad",       3,    6m),
+            ("Ivermectina 1%",       "Medicamento",   "ml",          20,    8m),
+            ("Sutura 3/0",           "Material",      "Unidad",      35,   20m),
+            ("Guantes Estériles M",  "Material",      "Par",         80,    3m),
+            ("Suero Fisiológico",    "Líquido",       "Frasco",       5,   12m),
         };
 
-        var productosExistentes = new HashSet<string>(
-            (await _productoService.ObtenerTodosAsync()).Select(p => p.Nombre),
-            StringComparer.OrdinalIgnoreCase);
+        var productosExistentes = (await _productoService.ObtenerTodosAsync())
+            .GroupBy(p => p.Nombre, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var (nombre, tipo, unidad, stock, costo) in productosData)
         {
-            if (productosExistentes.Contains(nombre))
+            if (productosExistentes.TryGetValue(nombre, out var existente))
+            {
+                // Producto ya sembrado: actualizar su costo (Bs) conservando vencimiento y stock.
+                await _productoService.ActualizarAsync(existente.Id, new ActualizarProductoDto
+                {
+                    Nombre           = nombre,
+                    Tipo             = tipo,
+                    UnidadMedida     = unidad,
+                    FechaVencimiento = existente.FechaVencimiento,
+                    CostoUnitario    = costo,
+                });
                 continue;
+            }
             await _productoService.CrearAsync(new CrearProductoDto
             {
                 Nombre          = nombre,

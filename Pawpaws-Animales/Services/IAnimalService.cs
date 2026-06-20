@@ -12,8 +12,9 @@ public interface IAnimalService
     Task<bool> ActualizarAsync(Guid id, ActualizarAnimalDto dto);
     Task<bool> EliminarAsync(Guid id);
 
-    // Mueve todos los animales de un rescatista a otro. Devuelve cuántos se reasignaron.
-    Task<int> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId);
+    // Mueve los animales de un rescatista al destino indicado, respetando el cupo máximo del
+    // destino: lo que exceda se deriva al Refugio. Devuelve cuántos fueron a cada lado.
+    Task<ReasignacionResultado> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId);
 
     // Cambia el estado de adopción. "Adoptado" registra salida + adoptante; "Devuelto" registra
     // la devolución conservando la adopción previa en el historial.

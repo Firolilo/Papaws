@@ -105,6 +105,18 @@ public class AnimalService : IAnimalService
 
         var rescatistaAnterior = actual.RescatistaId;
 
+        // Cupo máximo por rescatista: al asignarle un animal que no tenía, no puede superar el límite.
+        // El Refugio es la excepción (sin tope). Mover dentro del mismo rescatista no cuenta.
+        if (rescatistaAnterior != dto.RescatistaId && dto.RescatistaId != Rescatista.RefugioId)
+        {
+            var yaTiene = (await ObtenerPorRescatistaAsync(dto.RescatistaId)).Count;
+            if (yaTiene >= Rescatista.CapacidadMaxima)
+            {
+                throw new InvalidOperationException(
+                    $"{rescatista.NombreCompleto} ya tiene el máximo de {Rescatista.CapacidadMaxima} animales a su cargo. Asigna el animal a otro rescatista o déjalo en el Refugio.");
+            }
+        }
+
         actual.Nombre = dto.Nombre;
         actual.Especie = dto.Especie;
         actual.PesoActual = dto.PesoActual;
@@ -149,31 +161,57 @@ public class AnimalService : IAnimalService
         return true;
     }
 
-    public async Task<int> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId)
+    public async Task<ReasignacionResultado> ReasignarAnimalesAsync(Guid origenRescatistaId, Guid destinoRescatistaId)
     {
         if (origenRescatistaId == destinoRescatistaId)
         {
-            return 0;
+            return new ReasignacionResultado(0, 0);
+        }
+
+        var animales = await ObtenerPorRescatistaAsync(origenRescatistaId);
+        if (animales.Count == 0)
+        {
+            return new ReasignacionResultado(0, 0);
         }
 
         var origen = await _rescatistaService.ObtenerPorIdAsync(origenRescatistaId);
         var destino = await _rescatistaService.ObtenerPorIdAsync(destinoRescatistaId);
+        var refugio = await _rescatistaService.ObtenerPorIdAsync(Rescatista.RefugioId);
 
-        var animales = await ObtenerPorRescatistaAsync(origenRescatistaId);
+        // El Refugio es el destino institucional: acepta sin límite. Un rescatista normal tiene un
+        // cupo máximo; los animales que no entren en ese cupo se derivan al Refugio.
+        int cupoDestino;
+        if (destinoRescatistaId == Rescatista.RefugioId)
+        {
+            cupoDestino = animales.Count; // sin límite
+        }
+        else
+        {
+            var yaTiene = (await ObtenerPorRescatistaAsync(destinoRescatistaId)).Count;
+            cupoDestino = Math.Max(0, Rescatista.CapacidadMaxima - yaTiene);
+        }
+
+        int alDestino = 0, alRefugio = 0;
         foreach (var animal in animales)
         {
+            var vaAlDestino = alDestino < cupoDestino;
+            var nuevoId = vaAlDestino ? destinoRescatistaId : Rescatista.RefugioId;
+            var nuevoNombre = vaAlDestino ? (destino?.NombreCompleto ?? string.Empty) : (refugio?.NombreCompleto ?? "Refugio");
+
             // Quitar la fila del rescatista origen y re-escribir el animal con el nuevo rescatista
             // en ambas tablas (by_id y by_rescatista), de forma atómica por animal.
             var batch = new BatchStatement();
             batch.Add(_deleteByRescatistaStatement.Bind(origenRescatistaId, animal.Id));
-            animal.RescatistaId = destinoRescatistaId;
+            animal.RescatistaId = nuevoId;
             AgregarUpsert(batch, animal);
             await _session.ExecuteAsync(batch);
 
-            await RegistrarEventoCustodiaAsync(animal.Id, "Reasignacion", origenRescatistaId, origen?.NombreCompleto, destinoRescatistaId, destino?.NombreCompleto ?? string.Empty);
+            await RegistrarEventoCustodiaAsync(animal.Id, "Reasignacion", origenRescatistaId, origen?.NombreCompleto, nuevoId, nuevoNombre);
+
+            if (vaAlDestino) alDestino++; else alRefugio++;
         }
 
-        return animales.Count;
+        return new ReasignacionResultado(alDestino, alRefugio);
     }
 
     private async Task RegistrarEventoCustodiaAsync(Guid animalId, string tipo, Guid? rescAntId, string? rescAntNombre, Guid rescNuevoId, string rescNuevoNombre)

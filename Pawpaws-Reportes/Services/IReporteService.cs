@@ -63,4 +63,7 @@ public interface IReporteService
 
     // C21: Rescatistas por tipo de organización
     Task<List<RescatistaPorTipoOrgDto>> C21_RescatistasPorTipoOrganizacionAsync(string tipo);
+
+    // C22: Veterinarios por cantidad de consultas (ranking)
+    Task<List<VeterinarioPorConsultasDto>> C22_VeterinariosPorConsultasAsync();
 }

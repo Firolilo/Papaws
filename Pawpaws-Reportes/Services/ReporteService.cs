@@ -253,6 +253,28 @@ public class ReporteService : IReporteService
             }).ToList();
     }
 
+    public async Task<List<VeterinarioPorConsultasDto>> C22_VeterinariosPorConsultasAsync()
+    {
+        var veterinarios = await _consulta.GetVeterinariosAsync();
+        var consultas = await _consulta.GetConsultasAsync();
+
+        var conteoPorVet = consultas
+            .GroupBy(c => c.VeterinarioId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return veterinarios
+            .Select(v => new VeterinarioPorConsultasDto
+            {
+                IdVeterinario = v.Id,
+                NombreCompleto = v.NombreCompleto,
+                EspecialidadPrincipal = v.EspecialidadPrincipal,
+                TotalConsultas = conteoPorVet.TryGetValue(v.Id, out var n) ? n : 0
+            })
+            .OrderByDescending(v => v.TotalConsultas)
+            .ThenBy(v => v.NombreCompleto)
+            .ToList();
+    }
+
     public async Task<ProductoPorIdDto?> C14_ProductoPorIdAsync(Guid id)
     {
         var p = await _consulta.GetProductoByIdAsync(id);

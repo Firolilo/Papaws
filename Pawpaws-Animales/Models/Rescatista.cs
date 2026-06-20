@@ -6,6 +6,10 @@ public class Rescatista
     // rescatista y no se indica otro. Siempre existe y está oculto de los listados de gestión.
     public static readonly Guid RefugioId = new("11111111-1111-1111-1111-111111111111");
 
+    // Cupo máximo de animales que un rescatista (que no sea el Refugio) puede tener a su cargo.
+    // Al reasignar, lo que exceda este cupo se deriva al Refugio. El Refugio no tiene límite.
+    public const int CapacidadMaxima = 3;
+
     public Guid Id { get; set; }
     public string NombreCompleto { get; set; } = string.Empty;
     public string TelefonoContacto { get; set; } = string.Empty;

@@ -48,14 +48,21 @@ export const rescatistasApi = {
   historialOrganizaciones: (id: string) =>
     apiGet<EventoOrganizacion[]>("animales", `/api/rescatistas/${id}/organizaciones`),
   // reasignarA: rescatista al que se mueven los animales. Si se omite, el backend usa "Refugio".
+  // Devuelve cuántos animales fueron al destino y cuántos se derivaron al Refugio por falta de cupo.
   remove: (id: string, reasignarA?: string) =>
     apiDelete(
       "animales",
       reasignarA
         ? `/api/rescatistas/${id}?reasignarA=${reasignarA}`
         : `/api/rescatistas/${id}`
-    ),
+    ) as unknown as Promise<ReasignacionResumen>,
 };
+
+export interface ReasignacionResumen {
+  alDestino: number;
+  alRefugio: number;
+  nombreDestino: string;
+}
 
 export const organizacionesApi = {
   list: () => apiList<Organizacion>("animales", "/api/organizaciones"),
@@ -191,6 +198,7 @@ export const reportesApi = {
   c19_rescatistasPorZona:     (zona: string)      => reportesGet<unknown>(`/api/reportes/rescatistas/zona/${encodeURIComponent(zona)}?tamano=100`),
   c20_organizacionDetalle:    (id: string)        => reportesGet<unknown>(`/api/reportes/organizaciones/${id}/detalle`),
   c21_rescatistasPorTipoOrg:  (tipo: string)      => reportesGet<unknown>(`/api/reportes/organizaciones/tipo/${encodeURIComponent(tipo)}?tamano=100`),
+  c22_veterinariosPorConsultas: ()                => reportesGet<unknown>(`/api/reportes/veterinarios/ranking-consultas?tamano=100`),
 };
 
 // ── Seed (solo desarrollo) ─────────────────────────────────────────────────

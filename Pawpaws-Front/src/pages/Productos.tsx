@@ -21,10 +21,11 @@ const emptyForm: CrearProductoDto = {
   costoUnitario: 0,
 };
 
-const fmtMoneda = new Intl.NumberFormat("es-CO", {
+const fmtMoneda = new Intl.NumberFormat("es-BO", {
   style: "currency",
-  currency: "COP",
+  currency: "BOB",
   maximumFractionDigits: 0,
+  useGrouping: false,
 });
 
 // Estado de vencimiento de un producto (para badges/colores).
