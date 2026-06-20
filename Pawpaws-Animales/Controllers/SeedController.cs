@@ -127,11 +127,9 @@ public class SeedController : ControllerBase
             // Aves y Loros
             ("Pico",        "Ave",         0.3m, 0), ("Canela",     "Ave",         0.4m, 1),
             ("Loro",        "Loro",        0.9m, 2), ("Mango",      "Loro",        1.1m, 3),
-            // Exóticos
+            // Otros (solo especies que el refugio acepta)
             ("Tortugi",     "Tortuga",     1.8m, 4), ("Shell",      "Tortuga",     2.1m, 5),
             ("Hammy",       "Hámster",     0.11m, 6), ("Nugget",    "Hámster",     0.13m, 7),
-            ("Iggy",        "Iguana",      1.5m, 0), ("Gecko",      "Gecko",       0.08m, 1),
-            ("Chisco",      "Chinchilla",  0.6m, 2),
         };
 
         // Los nombres de animal NO son únicos (puede haber dos "Luna"), así que no se pueden

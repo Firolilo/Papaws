@@ -168,7 +168,18 @@ Estas son las tres preguntas de recorrido «de punta a punta» más probables. C
 poder trazarlas: \textbf{front $\rightarrow$ controlador $\rightarrow$ servicio
 $\rightarrow$ tabla de Cassandra}.
 
-\subsection{¿Dónde llaman los reportes a los rescatistas? (C1 / C2)}
+\begin{nota}
+\textbf{¿Qué son «C1», «C2», «C20»\ldots?} Son los \textbf{códigos de los reportes}
+(las consultas de lectura del sistema). El proyecto se diseñó \emph{query-first}:
+primero se listaron todas las preguntas que el sistema debe poder responder y se
+numeraron \texttt{C1}, \texttt{C2}, \texttt{C3}\ldots (del diagrama de queries, estilo
+«Chebotko» de Cassandra). Cada \textbf{Cn es una consulta concreta}; por ejemplo
+\textbf{C2 = «animales por rescatista»} y \textbf{C20 = «rescatistas y animales por
+organización»}. \textbf{La tabla con el significado de cada código está en la
+sección~\ref{sec:reportes}.}
+\end{nota}
+
+\subsection{¿Dónde llaman los reportes a los rescatistas? (C1 «rescatista por id» / C2 «animales por rescatista»)}
 \textbf{Recorrido:}
 \begin{itemize}[leftmargin=1.4em]
   \item \textbf{Front}: en \rutabox{Reportes.tsx} se elige el reporte y se llama
@@ -467,8 +478,53 @@ optimizaciones que se complementan.
 
 % ===================================================================
 \section{Reportes (el servicio agregador)}
+\label{sec:reportes}
 % ===================================================================
 
+\subsection{Catálogo de reportes: qué significa cada código \texttt{Cn}}
+Cada reporte es una \textbf{consulta de lectura} con un código \texttt{Cn} (sección~2).
+No se trata de tablas ni de código interno: es el \textbf{nombre de la pregunta} que el
+reporte responde. Esta es la lista completa:
+
+\smallskip
+\begin{center}\small
+\begin{tabular}{@{}l p{0.46\textwidth} l@{}}
+\toprule
+\textbf{Código} & \textbf{Qué pregunta responde} & \textbf{Sobre} \\
+\midrule
+C1  & Rescatista por ID                          & Rescatistas \\
+C2  & Animales por rescatista                     & Rescatistas \\
+C19 & Rescatistas por zona                        & Rescatistas \\
+C20 & Rescatistas y animales por organización     & Rescatistas \\
+C21 & Rescatistas por tipo de organización        & Rescatistas \\
+\addlinespace
+C3  & Animales por especie                        & Animales \\
+C4  & Consultas por animal                        & Animales \\
+C17 & Animales por nombre                         & Animales \\
+\addlinespace
+C15 & Consulta por código                         & Consultas \\
+C6  & Detalle de una consulta                     & Consultas \\
+C7  & Consultas por estado                        & Consultas \\
+C8  & Servicios usados en una consulta            & Consultas \\
+C9  & Productos usados en una consulta            & Consultas \\
+C16 & Consultas por fecha                         & Consultas \\
+\addlinespace
+C12 & Veterinario por ID                          & Veterinarios \\
+C5  & Consultas por veterinario                   & Veterinarios \\
+C13 & Veterinarios por especialidad               & Veterinarios \\
+C22 & Veterinarios con más consultas (ranking)    & Veterinarios \\
+\addlinespace
+C11 & Servicio por ID                             & Servicios \\
+C10 & Inventario de productos por stock           & Productos \\
+C14 & Producto por ID                             & Productos \\
+\bottomrule
+\end{tabular}
+\end{center}
+\smallskip
+\noindent\footnotesize (La numeración sigue el diagrama original de queries; por eso no
+hay un «C18».)\normalsize
+
+\subsection{Cómo se arma un reporte}
 Reportes no tiene base propia: cada reporte combina llamadas HTTP a Animales y/o
 Consulta. El ejemplo más completo es \textbf{C20} («Rescatistas y animales por
 organización»): pide la organización, luego sus rescatistas, y para CADA rescatista
@@ -554,6 +610,318 @@ docker logs -f papaws-animales   # requests HTTP que llegan al microservicio .NE
 $\rightarrow$ servicio $\rightarrow$ query a Cassandra.
 
 % ===================================================================
+\section{Comandos de terminal para la demo}
+\label{sec:comandos}
+% ===================================================================
+
+Comandos que el ingeniero puede pedirte en la terminal del proyecto para
+\textbf{mostrar algo en vivo}. Asumen el sistema levantado con Docker. Para ver las
+\emph{queries} CQL que dispara la app está el \textbf{tracing} de la
+sección~\ref{sec:queries}.
+
+\begin{precision}
+\textbf{¿DÓNDE escribo estos comandos? Leé esto primero (es el error más común).}
+Hay \textbf{dos} maneras de llegar a Cassandra; \textbf{no las mezcles}:
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item \textbf{Tu terminal de Windows} (PowerShell o CMD, \emph{fuera} de Docker): ahí
+        funcionan los comandos que empiezan con \texttt{docker\ldots} (como
+        \texttt{docker exec -it papaws-cassandra-animales cqlsh}). El programa
+        \texttt{docker} \textbf{solo existe en tu terminal del sistema}.
+  \item \textbf{La pestaña «Exec» de Docker Desktop}: esa consola \textbf{ya está adentro
+        del contenedor}. Ahí \textbf{NO} escribas \texttt{docker exec\ldots} (te dirá
+        \texttt{docker: not found}). Escribí directamente \texttt{cqlsh} y listo.
+\end{itemize}
+Una vez \emph{dentro} de \texttt{cqlsh} (cursor \texttt{cqlsh>}), los comandos CQL
+(\texttt{USE}, \texttt{DESCRIBE}, \texttt{SELECT}) son iguales en las dos formas.
+\textbf{Cada uno termina en punto y coma \texttt{;}} y los keyspaces llevan
+\textbf{guion bajo}: \texttt{papaws\_animales}, \texttt{papaws\_consulta} (no guion).
+\end{precision}
+
+\subsection{Ver que todo está corriendo}
+\begin{lstlisting}[style=shell]
+docker ps                 # todos los contenedores y sus puertos
+docker compose ps         # solo los del proyecto
+\end{lstlisting}
+
+\subsection{Demostrar que es un clúster distribuido (2 nodos)}
+El comando estrella para una defensa de sistemas distribuidos: muestra el anillo con
+sus dos nodos en estado \texttt{UN} (Up/Normal) y el porcentaje de datos de cada uno.
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales nodetool status
+\end{lstlisting}
+\dondemirar{si ves dos filas \texttt{UN}, son los dos nodos del mismo anillo (\texttt{papaws-cluster}).}
+
+\subsection{Ver los keyspaces y su factor de réplica}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT keyspace_name, replication FROM system_schema.keyspaces \
+   WHERE keyspace_name IN ('papaws_animales','papaws_consulta');"
+\end{lstlisting}
+\noindent Muestra \texttt{replication\_factor = 2}: cada keyspace está copiado en los dos nodos.
+
+\subsection{Ver las tablas y sus claves (modelado query-first)}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e "DESCRIBE KEYSPACE papaws_animales;"
+docker exec papaws-cassandra-consulta cqlsh -e "DESCRIBE KEYSPACE papaws_consulta;"
+\end{lstlisting}
+\noindent En cada \texttt{CREATE TABLE} se ve la \texttt{PRIMARY KEY}: el primer
+paréntesis es la clave de partición; lo que sigue son las columnas de \emph{clustering}.
+
+\subsection{Contar y ver datos de una tabla}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-consulta cqlsh -e \
+  "SELECT COUNT(*) FROM papaws_consulta.servicios_by_id;"
+
+docker exec papaws-cassandra-consulta cqlsh -e \
+  "SELECT nombre, precio_base FROM papaws_consulta.servicios_by_id;"
+\end{lstlisting}
+
+\subsection{Levantar, reiniciar y ver logs}
+\begin{lstlisting}[style=shell]
+docker compose up --build          # levanta Cassandra + los 3 servicios
+docker compose restart papaws-consulta
+docker logs -f papaws-consulta     # salida del microservicio .NET
+\end{lstlisting}
+
+\subsection{Front en modo desarrollo}
+\begin{lstlisting}[style=shell]
+cd Pawpaws-Front
+npm install
+npm run dev        # abre http://localhost:5173
+\end{lstlisting}
+
+\subsection{Probar un endpoint por terminal (con token)}
+Casi todo exige JWT. Primero se hace \emph{login} (devuelve un \texttt{token}) y después
+se usa en el header \texttt{Authorization}.
+\begin{lstlisting}[style=shell]
+# 1) Login: copia el valor de "token" de la respuesta
+curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"TU_EMAIL\",\"password\":\"TU_PASSWORD\"}"
+
+# 2) Usar el token en otra llamada (ej. listar servicios):
+curl -s http://localhost:8081/api/servicios \
+  -H "Authorization: Bearer PEGAR_TOKEN_AQUI"
+\end{lstlisting}
+\dondemirar{login en \rutabox{Pawpaws-Animales/Controllers/AuthController.cs} (\texttt{POST /api/auth/login}, campos \texttt{email} y \texttt{password}).}
+
+\begin{nota}
+\textbf{Truco para la demo.} Encadená \texttt{nodetool status} (prueba los 2 nodos) +
+\texttt{DESCRIBE KEYSPACE} (prueba el modelado) + el \emph{tracing} de la
+sección~\ref{sec:queries} (prueba qué query real se ejecutó). Con esos tres tenés
+cubierto «distribuido», «modelado» y «en vivo».
+\end{nota}
+
+\subsection{Chuleta: «si te pide esto, escribís esto»}
+Cada bloque es lo que te puede decir el ingeniero y, debajo, el comando exacto que
+pegás y lo que va a aparecer. \textbf{Todo es copiar y pegar.}
+
+\medskip
+\noindent\textbf{1. «Mostrame que de verdad es distribuido / que hay dos nodos.»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales nodetool status
+\end{lstlisting}
+\noindent{\footnotesize Aparecen \textbf{dos} filas que empiezan con \texttt{UN} (Up/Normal): son los dos nodos del mismo clúster.}
+
+\medskip
+\noindent\textbf{2. «Mostrame qué contenedores están corriendo.»}
+\begin{lstlisting}[style=shell]
+docker ps
+\end{lstlisting}
+\noindent{\footnotesize Lista los contenedores (los 3 servicios y las 2 Cassandra) con sus puertos.}
+
+\medskip
+\noindent\textbf{3. «Mostrame las tablas del servicio de animales.»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e "DESCRIBE KEYSPACE papaws_animales;"
+\end{lstlisting}
+\noindent{\footnotesize Muestra todas las tablas con su \texttt{PRIMARY KEY}.}
+
+\medskip
+\noindent\textbf{4. «Mostrame los datos que hay en una tabla.»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT * FROM papaws_animales.animales_by_rescatista LIMIT 10;"
+\end{lstlisting}
+\noindent{\footnotesize Trae hasta 10 filas reales de esa tabla.}
+
+\medskip
+\noindent\textbf{5. «¿Cuántos registros hay en esa tabla?»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-consulta cqlsh -e \
+  "SELECT COUNT(*) FROM papaws_consulta.servicios_by_id;"
+\end{lstlisting}
+\noindent{\footnotesize Devuelve un número: la cantidad de filas.}
+
+\medskip
+\noindent\textbf{6. «Mostrame que cada base está replicada en los dos nodos.»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT keyspace_name, replication FROM system_schema.keyspaces \
+   WHERE keyspace_name IN ('papaws_animales','papaws_consulta');"
+\end{lstlisting}
+\noindent{\footnotesize En \texttt{replication} se lee \texttt{'replication\_factor': '2'}.}
+
+\medskip
+\noindent\textbf{7. «Mostrame la consulta (CQL) que se ejecutó de verdad.»}
+\begin{lstlisting}[style=shell]
+docker exec papaws-cassandra-animales nodetool settraceprobability 1
+# (ahora usá la app: abrí una ficha o generá un reporte)
+docker exec papaws-cassandra-animales cqlsh -e \
+  "SELECT started_at, parameters FROM system_traces.sessions LIMIT 20;"
+docker exec papaws-cassandra-animales nodetool settraceprobability 0
+\end{lstlisting}
+\noindent{\footnotesize En \texttt{parameters} aparece el texto CQL real. \textbf{Acordate de apagarlo} con el último comando.}
+
+\medskip
+\noindent\textbf{8. «Mostrame los logs del servicio de consulta.»}
+\begin{lstlisting}[style=shell]
+docker logs --tail 30 papaws-consulta
+\end{lstlisting}
+\noindent{\footnotesize Muestra las últimas 30 líneas de actividad del microservicio .NET.}
+
+\subsection{Paso a paso: mostrar una consulta en Cassandra (desde \texttt{DESCRIBE})}
+Esto es lo más pedido. Seguí los pasos \textbf{en orden}; cada uno dice qué escribir y
+qué vas a ver. (Es para el servicio de \emph{animales}; para \emph{consulta} cambiás
+\texttt{animales} por \texttt{consulta} en los nombres.)
+
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Verificá que Cassandra esté prendida.}
+  \begin{lstlisting}[style=shell]
+docker ps
+  \end{lstlisting}
+  {\footnotesize Tienen que aparecer \texttt{papaws-cassandra-animales} y \texttt{papaws-cassandra-consulta}. Si no están: \texttt{docker compose up -d}.}
+
+  \item \textbf{Entrá a la consola de Cassandra (cqlsh).} Según cómo la abras:
+  \begin{lstlisting}[style=shell]
+# A) Desde tu terminal de Windows (PowerShell / CMD):
+docker exec -it papaws-cassandra-animales cqlsh
+
+# B) Si estás en la pestaña "Exec" de Docker Desktop (ya estás adentro), solo:
+cqlsh
+  \end{lstlisting}
+  {\footnotesize En ambos casos el cursor cambia a \texttt{cqlsh>}: ya estás \emph{dentro} de Cassandra. Usá \textbf{una} de las dos, no las dos juntas.}
+
+  \item \textbf{Entrá al keyspace} (la «base» de ese servicio).
+  \begin{lstlisting}[style=shell]
+USE papaws_animales;
+  \end{lstlisting}
+  {\footnotesize Ahora el cursor dice \texttt{cqlsh:papaws\_animales>}.}
+
+  \item \textbf{Mirá qué tablas hay} (acá está el \texttt{DESCRIBE}).
+  \begin{lstlisting}[style=shell]
+DESCRIBE TABLES;
+  \end{lstlisting}
+  {\footnotesize Aparece la lista: \texttt{animales\_by\_id}, \texttt{animales\_by\_rescatista}, \texttt{rescatistas\_by\_id}, etc.}
+
+  \item \textbf{(Opcional) Mirá cómo está hecha una tabla y su clave.}
+  \begin{lstlisting}[style=shell]
+DESCRIBE TABLE animales_by_rescatista;
+  \end{lstlisting}
+  {\footnotesize Muestra las columnas y la \texttt{PRIMARY KEY}. La primera columna entre paréntesis es la \textbf{clave de partición}: el campo por el que se busca rápido.}
+
+  \item \textbf{Mostrá los datos de la tabla} (esta es «la consulta»).
+  \begin{lstlisting}[style=shell]
+SELECT * FROM animales_by_rescatista LIMIT 10;
+  \end{lstlisting}
+  {\footnotesize Aparecen filas reales: \texttt{rescatista\_id}, el id del animal, nombre, especie\ldots}
+
+  \item \textbf{(Para lucirte) Filtrá por la clave de partición.} Copiá un \texttt{rescatista\_id} de la salida anterior y pegalo en lugar de \texttt{PEGA\_EL\_UUID}:
+  \begin{lstlisting}[style=shell]
+SELECT * FROM animales_by_rescatista WHERE rescatista_id = PEGA_EL_UUID;
+  \end{lstlisting}
+  {\footnotesize Devuelve solo los animales de ese rescatista, en \textbf{una sola lectura} de una partición (sin JOIN). \emph{Eso} es el modelado query-first.}
+
+  \item \textbf{Salí de la consola.}
+  \begin{lstlisting}[style=shell]
+exit
+  \end{lstlisting}
+\end{enumerate}
+
+\begin{nota}
+\textbf{Si te trabás (errores típicos).}
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item \texttt{docker: not found} $\rightarrow$ estás \emph{adentro} del contenedor
+        (pestaña «Exec»): no uses \texttt{docker\ldots}, escribí directamente
+        \texttt{cqlsh}.
+  \item \texttt{Improper DESCRIBE command} $\rightarrow$ a \texttt{DESCRIBE} hay que
+        decirle qué describir y cerrar con \texttt{;}: \texttt{DESCRIBE TABLES;} o
+        \texttt{DESCRIBE KEYSPACES;}.
+  \item Keyspace que no existe $\rightarrow$ va con \textbf{guion bajo}
+        (\texttt{papaws\_animales}), no con guion (\texttt{papaws-animales}).
+  \item Todo comando CQL termina en \textbf{punto y coma} \texttt{;}.
+  \item El \texttt{uuid} del paso 7 va \textbf{sin comillas} (es un identificador).
+  \item \texttt{ALLOW FILTERING} $\rightarrow$ estás filtrando por una columna que
+        \emph{no} es la clave de partición: elegí otra tabla o filtrá por su clave
+        (justo lo que demuestra el modelado query-first).
+\end{itemize}
+\end{nota}
+
+% ===================================================================
+\section{Partes del código fáciles de cambiar (en vivo)}
+\label{sec:cambios}
+% ===================================================================
+
+Si te piden modificar algo en caliente, estos son cambios de pocas líneas y dónde
+están.
+
+\begin{nota}
+\textbf{Cómo se aplica cada cambio.} \textbf{Front} (\rutabox{Pawpaws-Front}): Vite
+\textbf{recarga solo} al guardar; se ve al instante. \textbf{Backend} (.NET): hay que
+\textbf{reconstruir} el servicio (\texttt{docker compose up -{}-build <servicio>} o
+\texttt{dotnet run}) para que tome efecto.
+\end{nota}
+
+\subsection{Cupo máximo de animales por rescatista}
+Cambiar el número (p.\,ej. de 3 a 5). Hay \textbf{dos lugares} que deben coincidir:
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item Backend (la regla real): constante \texttt{CapacidadMaxima} en \rutabox{Pawpaws-Animales/Models/Rescatista.cs}.
+  \item Front (solo el texto del aviso): \texttt{MAX\_POR\_RESCATISTA} en \rutabox{Pawpaws-Front/src/pages/Rescatistas.tsx}.
+\end{itemize}
+\dondemirar{reconstruir Animales tras el cambio; el front es solo cosmético.}
+
+\subsection{Cuántos elementos por página}
+El valor por defecto es 10. Se cambia en el hook (afecta a todas las listas) o en una
+llamada puntual.
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item General: \texttt{pageSize = 10} en \rutabox{Pawpaws-Front/src/hooks/usePaginated.ts}.
+  \item Una lista puntual: el 2.\textsuperscript{o} argumento de \texttt{usePaginated(lista, 10, ...)} en la página.
+\end{itemize}
+\dondemirar{solo front; se ve al guardar.}
+
+\subsection{Precios de servicios y productos sembrados}
+Editar los arreglos \texttt{serviciosData} / \texttt{productosData} en
+\rutabox{Pawpaws-Consulta/Controllers/SeedController.cs}. Cambiar el código \textbf{no}
+reescribe solo lo que ya está en Cassandra: hay que \textbf{re-sembrar} o editar el
+precio puntual desde la pantalla de Servicios/Productos.
+
+\subsection{Símbolo y formato de la moneda}
+Se arma con \texttt{Intl.NumberFormat("es-BO", \{ currency: "BOB" \})}. Para cambiar el
+símbolo, los decimales o el separador de miles (\texttt{useGrouping}), se toca ese
+formateador en las páginas que muestran dinero: \rutabox{Gastos.tsx},
+\rutabox{Productos.tsx}, \rutabox{Servicios.tsx} y \rutabox{ServicioDetalle.tsx}.
+
+\subsection{Tamaño de página por defecto del backend}
+\texttt{TamanoPorDefecto} en \rutabox{Common/Paginacion.cs} (hay uno por servicio).
+
+\subsection{Umbral de «stock bajo»}
+Un producto se marca «stock bajo» con 10 unidades o menos. Cambiá la comparación
+\texttt{p.stockDisponible <= 10} en \rutabox{Pawpaws-Front/src/pages/Productos.tsx}.
+
+\subsection{Catálogos: especies, especialidades, tipos de organización}
+\begin{itemize}[leftmargin=1.4em, nosep]
+  \item Especies y especialidades: \rutabox{Pawpaws-Front/src/constants.ts}
+        (\texttt{ESPECIES\_ACEPTADAS}, \texttt{ESPECIALIDADES\_VETERINARIAS}).
+  \item Tipos de organización: \texttt{TIPOS\_ORGANIZACION} en \rutabox{Pawpaws-Front/src/pages/Organizaciones.tsx}; el backend valida los suyos en \rutabox{OrganizacionService.cs}.
+\end{itemize}
+
+\subsection{Una regla de validación}
+Las reglas de negocio viven en el \emph{Service} dueño del dato. Por ejemplo, «fecha
+de ingreso no futura» y «nombre no repetido» se comprueban en \rutabox{AnimalService.cs},
+\rutabox{ProductoService.cs} y \rutabox{OrganizacionService.cs}. Cambiar el mensaje o el
+umbral es editar esa comprobación y reconstruir el servicio.
+
+% ===================================================================
 \section{Resumen: quién llama a quién}
 % ===================================================================
 
@@ -614,6 +982,81 @@ HTTP) y que cada keyspace solo lo abre su propio servicio
 (\texttt{ConnectAsync(keyspace)} con su propio keyspace en cada \texttt{Program.cs}).
 Con la Forma B del tracing se ve que las queries del keyspace
 \texttt{papaws\_consulta} solo las origina el servicio de Consulta.
+
+% ===================================================================
+\section{Banco de preguntas rápidas}
+% ===================================================================
+
+Respuestas cortas para repasar de memoria y para preguntas sueltas.
+
+\subsection{Arquitectura y comunicación}
+\pregunta{¿Qué protocolo usan los servicios entre sí?}
+HTTP/REST con JSON.
+
+\pregunta{¿La comunicación es síncrona o asíncrona?}
+Síncrona (request/response). No hay colas ni mensajería: las llamadas cruzadas son
+validaciones puntuales al escribir.
+
+\pregunta{¿Cómo encuentra un servicio a otro?}
+Por URL configurada (en Docker, por el nombre del contenedor). No hay \emph{service
+discovery} dinámico.
+
+\pregunta{¿Qué pasa si cambio el puerto de un servicio?}
+Se ajusta en \rutabox{docker-compose.yml} y en las URLs del front (su \texttt{.env}).
+
+\pregunta{¿Cuántos reportes hay?}
+Más de veinte (C1\ldots C22): de rescatistas, animales, consultas, veterinarios,
+servicios y productos.
+
+\subsection{Cassandra}
+\pregunta{¿Clave de partición vs clustering?}
+Partición = en qué nodo vive y por qué campo se busca rápido; clustering = el orden de
+las filas dentro de esa partición.
+
+\pregunta{¿Por qué no usar \texttt{ALLOW FILTERING}?}
+Porque hace \emph{scan} y no escala; en su lugar se crea una tabla (o índice) por cada
+consulta de lectura.
+
+\pregunta{¿Qué pasa si agrego una columna a una tabla?}
+\texttt{ALTER TABLE} en caliente; las filas viejas la tienen en \texttt{null} (justo lo
+que pasó con \texttt{costo\_unitario} antes de cargar precios).
+
+\pregunta{¿Por qué 2 nodos con RF\,=\,2?}
+Para tolerar la caída de un nodo: cada dato tiene una copia en ambos.
+
+\pregunta{¿Cómo evitan inyección en las queries?}
+Con \emph{prepared statements} parametrizados (no se concatena texto); además se
+compilan una vez y se reutilizan.
+
+\subsection{.NET y front}
+\pregunta{¿Cómo se conecta el backend a Cassandra?}
+Con el driver de DataStax: una sesión por keyspace, abierta al arrancar en
+\texttt{Program.cs}.
+
+\pregunta{¿Dónde se registran los servicios?}
+Inyección de dependencias en el \texttt{Program.cs} de cada microservicio.
+
+\pregunta{¿Dónde guarda el front el token?}
+En el navegador, y lo manda en el header \texttt{Authorization} en cada llamada.
+\dondemirar{\rutabox{Pawpaws-Front/src/auth/AuthContext.tsx} y \texttt{authHeaders()} en \rutabox{src/api/client.ts}}
+
+\pregunta{¿Qué pasa cuando el token expira?}
+El backend responde \texttt{401} y el front lo maneja cerrando sesión / volviendo al
+login.
+
+\subsection{Negocio}
+\pregunta{¿Qué roles existen?}
+Administrador, Encargado de consultas y Encargado de rescatistas; cada endpoint exige
+el rol que corresponde.
+
+\pregunta{¿Un animal puede tener varias consultas?}
+Sí; la relación es 1--N por \texttt{animal\_id}.
+
+\pregunta{¿Qué pasa con el stock al cancelar una consulta?}
+Se devuelve, y por eso esa consulta no cuenta como gasto.
+
+\pregunta{¿Un producto vencido se borra?}
+No; se marca su vencimiento y el front lo resalta. La baja siempre es lógica.
 
 \vspace{1.5em}
 \begin{center}\small\itshape

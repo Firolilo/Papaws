@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Plus,
   ChevronRight,
@@ -75,7 +75,10 @@ export function Consultas() {
   const [estadoFilter, setEstadoFilter] = useState<string>("");
   const [vetFilter, setVetFilter] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"lista" | "agenda">("lista");
+  const [searchParams] = useSearchParams();
+  const [view, setView] = useState<"lista" | "agenda">(
+    searchParams.get("vista") === "agenda" ? "agenda" : "lista"
+  );
 
   const animalesById = useMemo(
     () => Object.fromEntries((animales.data ?? []).map((a) => [a.id, a])),

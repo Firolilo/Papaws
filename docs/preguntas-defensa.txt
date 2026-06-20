@@ -1,0 +1,379 @@
+==========================================================================
+GUIA DE DEFENSA - Papaws (Sistemas Distribuidos)
+==========================================================================
+
+Documento en texto plano. Explica el sistema y, sobre todo, EN QUE ARCHIVO
+y metodo ocurre cada cosa, para responder preguntas del tipo "en donde
+llaman los reportes a los rescatistas?", "en donde llaman los rescatistas a
+los animales cuando se da clic en info?" o "en donde llaman los animales a
+sus consultas?". Tambien explica como ver, en vivo, las consultas que se
+estan haciendo a Cassandra (seccion 11).
+
+
+--------------------------------------------------------------------------
+1. LA IDEA GENERAL
+--------------------------------------------------------------------------
+
+El sistema son TRES microservicios .NET independientes, cada uno con su
+propia base de datos Cassandra (keyspace propio), mas un frontend React que
+los consume:
+
+  - Animales (puerto 8080): rescatistas, organizaciones y animales. Es el
+    dueno de esos datos.
+  - Consulta (puerto 8081): veterinarios, servicios, productos (inventario)
+    y consultas clinicas.
+  - Reportes (puerto 8082): NO tiene datos propios; es un AGREGADOR. Arma
+    los reportes pidiendo datos por HTTP a los otros dos servicios.
+
+Frontend: carpeta Pawpaws-Front. Cada llamada del front sabe a que servicio
+ir gracias a una "zona" ("animales", "consulta") o a la base de reportes.
+Eso se resuelve en Pawpaws-Front/src/api/client.ts y los endpoints
+concretos estan en Pawpaws-Front/src/api/endpoints.ts.
+
+Regla clave para defender la arquitectura: un servicio NUNCA entra a la base
+de datos de otro. Si Consulta o Reportes necesitan datos de animales, los
+piden por la API REST de Animales. Esto mantiene los servicios desacoplados.
+
+
+--------------------------------------------------------------------------
+2. LOS TRES FLUJOS QUE PREGUNTASTE, DE PUNTA A PUNTA
+--------------------------------------------------------------------------
+
+2.1 EN DONDE LLAMAN LOS REPORTES A LOS RESCATISTAS?
+(ejemplo con C1 "rescatista por id" y C2 "animales por rescatista")
+
+  1. Front: en Pawpaws-Front/src/pages/Reportes.tsx se elige el reporte; el
+     fetch llama a reportesApi.c1_rescatistaPorId(id) /
+     c2_animalesPorRescatista(id), definidos en
+     Pawpaws-Front/src/api/endpoints.ts. Esos pegan al servicio de Reportes,
+     no a Animales directamente.
+  2. Servicio de Reportes: el request entra por
+     Pawpaws-Reportes/Controllers/RescatistasReportesController.cs, que llama
+     a Pawpaws-Reportes/Services/ReporteService.cs
+     (C1_RescatistaPorIdAsync / C2_AnimalesPorRescatistaAsync).
+  3. AQUI es donde "los reportes llaman a los rescatistas": ReporteService no
+     tiene base de datos; usa el cliente HTTP
+     Pawpaws-Reportes/Services/AnimalesClient.cs, metodo
+     GetRescatistaByIdAsync(id), que hace GET api/rescatistas/{id} CONTRA el
+     servicio de Animales. Para C2 ademas llama
+     GetAnimalesByRescatistaAsync(id) -> GET api/animales/rescatista/{id}.
+  4. Servicio de Animales: responde desde
+     Pawpaws-Animales/Controllers/RescatistasController.cs ->
+     Pawpaws-Animales/Services/RescatistaService.cs, que lee la tabla
+     Cassandra rescatistas_by_id.
+
+  Detalle para defender: el cliente de Reportes REENVIA el token JWT del
+  usuario (metodo CrearRequest en AnimalesClient.cs copia el header
+  Authorization). Asi el servicio de Animales sigue exigiendo autenticacion.
+
+  El reporte C20 ("Rescatistas y animales por organizacion") es el ejemplo
+  mas completo del agregador: en ReporteService.C20_OrganizacionDetalleAsync
+  pide la organizacion, luego todos los rescatistas filtrando por
+  OrganizacionId, y para CADA rescatista pide sus animales. Es decir, el
+  "join" organizacion->rescatistas->animales lo arma el servicio de Reportes
+  en memoria, combinando varias llamadas HTTP, porque los datos viven en
+  servicios distintos.
+
+
+2.2 EN DONDE LLAMAN LOS RESCATISTAS A LOS ANIMALES (CLIC EN "VER FICHA")?
+
+  1. Front: en Pawpaws-Front/src/pages/Rescatistas.tsx el boton "Ver ficha"
+     navega a /rescatistas/:id. Esa ruta esta registrada en
+     Pawpaws-Front/src/App.tsx y la pinta
+     Pawpaws-Front/src/pages/RescatistaDetalle.tsx.
+  2. AQUI "el rescatista llama a sus animales": en RescatistaDetalle.tsx se
+     hace animalesApi.porRescatista(id), definido en endpoints.ts como
+     GET /api/animales/rescatista/{id} contra el servicio de Animales.
+  3. Servicio de Animales:
+     Pawpaws-Animales/Controllers/AnimalesController.cs metodo
+     ObtenerPorRescatista -> Pawpaws-Animales/Services/AnimalService.cs
+     ObtenerPorRescatistaAsync, que lee la tabla animales_by_rescatista.
+
+  Por que existe esa tabla (pregunta tipica de Cassandra): esta DESNORMALIZADA
+  y PARTICIONADA por rescatista_id, justo para que "dame todos los animales
+  de este rescatista" sea una sola lectura eficiente de una particion, sin
+  JOIN ni scan. El mismo animal se guarda tambien en animales_by_id (para
+  buscarlo por su propio id). El esquema esta en
+  Pawpaws-Animales/Data/CassandraSchema.cs.
+
+
+2.3 EN DONDE LLAMAN LOS ANIMALES A SUS CONSULTAS?
+
+  1. Front: en Pawpaws-Front/src/pages/AnimalDetalle.tsx se hace
+     consultasApi.porAnimal(id) (endpoints.ts), que es
+     GET /api/consultas/animal/{id} CONTRA EL SERVICIO DE CONSULTA (no el de
+     Animales: las consultas viven en otro microservicio).
+  2. Servicio de Consulta:
+     Pawpaws-Consulta/Controllers/ConsultasController.cs metodo
+     ObtenerPorAnimal -> Pawpaws-Consulta/Services/ConsultaService.cs
+     ObtenerPorAnimalAsync.
+  3. Como lo resuelve en Cassandra: primero lee la tabla indice
+     consulta_codigos_by_animal (particionada por animal_id) para obtener los
+     codigos de las consultas de ese animal; luego, con
+     ObtenerLivianasPorCodigosAsync, trae cada consulta desde
+     consultas_by_codigo. Es el patron "tabla indice + lectura por clave".
+
+  El animal y la consulta estan en SERVICIOS DISTINTOS, asi que no hay
+  foreign key entre ellos. La relacion se mantiene por el animal_id que la
+  consulta guarda, y la consistencia se cuida al crear la consulta (ver
+  seccion 5).
+
+
+--------------------------------------------------------------------------
+3. MODELADO EN CASSANDRA (por que no es como SQL)
+--------------------------------------------------------------------------
+
+La regla es "una tabla por consulta de lectura" (query-first), porque
+Cassandra no hace JOINs ni filtra eficientemente por columnas que no sean la
+clave de particion. Por eso el mismo dato se guarda varias veces
+(desnormalizacion):
+
+  - Animales: animales_by_id (buscar por id) y animales_by_rescatista
+    (listar por rescatista). Ambas se escriben juntas en GuardarAnimalAsync
+    de Pawpaws-Animales/Services/AnimalService.cs (un BatchStatement).
+  - Consultas: consultas_by_codigo (por codigo), consulta_codigos_by_animal
+    y consulta_codigos_by_veterinario (indices para listar),
+    consulta_servicios_by_codigo y consulta_productos_by_codigo (relaciones
+    de la consulta). Ver Pawpaws-Consulta/Data/CassandraSchema.cs.
+
+Pregunta probable: "y si queres saber en que consultas se uso un servicio?".
+Esa consulta inversa no se puede resolver con consulta_servicios_by_codigo
+(esta particionada por codigo). Por eso agregamos una tabla de INDICE INVERSO
+consulta_codigos_by_servicio (particionada por servicio_id), que se mantiene
+sincronizada al crear, editar y borrar una consulta. La usa la ficha de
+servicio. Ver ObtenerPorServicioAsync y los INSERT/DELETE del indice en
+Pawpaws-Consulta/Services/ConsultaService.cs.
+
+
+--------------------------------------------------------------------------
+4. TRAZABILIDAD / HISTORIAL
+--------------------------------------------------------------------------
+
+Para no perder historia, los cambios se guardan como EVENTOS INMUTABLES en
+tablas con orden de clustering por fecha descendente:
+
+  - Custodia de cada animal (ingreso y reasignaciones entre rescatistas):
+    eventos_custodia_by_animal.
+  - Cambios de organizacion de cada rescatista (alta y cambios):
+    eventos_organizacion_by_rescatista.
+  - Adopciones y devoluciones del animal: eventos_adopcion_by_animal.
+
+Las tablas y un BACKFILL idempotente (siembra los eventos iniciales para los
+datos que ya existian) estan en Pawpaws-Animales/Data/CassandraSchema.cs. El
+registro de eventos al crear/editar/reasignar esta en
+Pawpaws-Animales/Services/AnimalService.cs y
+Pawpaws-Animales/Services/RescatistaService.cs. En el front se ven como
+lineas de tiempo en AnimalDetalle.tsx y RescatistaDetalle.tsx.
+
+Idea para defender: cada evento guarda tambien el NOMBRE (no solo el id).
+Asi, si despues se da de baja un rescatista u organizacion, el historial
+sigue siendo legible en lugar de mostrar un id muerto.
+
+
+--------------------------------------------------------------------------
+5. INTEGRIDAD ENTRE SERVICIOS (sin foreign keys)
+--------------------------------------------------------------------------
+
+Como cada servicio tiene su base, no hay claves foraneas que crucen
+servicios. La consistencia se cuida al escribir:
+
+  - Al CREAR una consulta, el servicio de Consulta verifica el animal
+    LLAMANDO POR HTTP al servicio de Animales. Esta en
+    Pawpaws-Consulta/Services/AnimalReferenceService.cs (ObtenerEstadoAsync,
+    con reintentos ante fallos de red) y se usa en CrearAsync de
+    Pawpaws-Consulta/Services/ConsultaService.cs. Si el animal no existe, se
+    rechaza.
+  - Esa misma verificacion trae el ESTADO del animal y rechaza agendar
+    consulta si esta "Adoptado" (un animal adoptado no recibe consultas hasta
+    que se registre su devolucion).
+
+Pregunta probable: "y si el servicio de Animales esta caido?". El cliente
+reintenta (backoff) y, si no logra respuesta, la creacion falla con error
+controlado en lugar de dejar datos inconsistentes.
+
+
+--------------------------------------------------------------------------
+6. CONCURRENCIA: EL STOCK DE PRODUCTOS
+--------------------------------------------------------------------------
+
+Si dos consultas descuentan stock del mismo producto a la vez, un UPDATE
+normal podria pisar el valor del otro (lost update). Lo resolvimos con
+COMPARE-AND-SET usando LWT (transacciones ligeras) de Cassandra:
+UPDATE ... IF stock_disponible = ?. Si otro proceso cambio el stock
+entremedio, el IF falla, leemos el valor real que devuelve Cassandra y
+reintentamos. Esta en AjustarStockAsync de
+Pawpaws-Consulta/Services/ProductoService.cs.
+
+
+--------------------------------------------------------------------------
+7. GASTOS (refugio sin fines de lucro)
+--------------------------------------------------------------------------
+
+El reporte de gastos lo calcula EL SERVICIO DE CONSULTA, porque ahi estan
+todos los datos: precio de los servicios y costo unitario de los productos.
+El endpoint es GET /api/consultas/gastos, metodo ObtenerGastosAsync en
+Pawpaws-Consulta/Services/ConsultaService.cs: por cada consulta suma el costo
+de sus servicios (precio_base) mas el de los productos consumidos
+(costo_unitario x cantidad). El front lo agrupa por mes en
+Pawpaws-Front/src/pages/Gastos.tsx. Las consultas canceladas se excluyen
+porque devuelven el stock y no representan gasto real.
+
+
+--------------------------------------------------------------------------
+8. SEGURIDAD / AUTENTICACION
+--------------------------------------------------------------------------
+
+Login con JWT y autorizacion por ROLES (Administrador, Encargado de
+consultas, Encargado de rescatistas). Cada endpoint esta protegido con
+[Authorize(Roles = ...)]. Cuando un servicio llama a otro (Consulta->Animales,
+Reportes->Animales/Consulta), REENVIA el token del usuario, asi la
+autorizacion se respeta en toda la cadena. El secreto de firma del JWT y la
+contrasena NO estan en el repositorio: se leen de variables de entorno /
+user-secrets, y appsettings.json queda en blanco.
+
+
+--------------------------------------------------------------------------
+9. OTRAS PREGUNTAS FRECUENTES Y DONDE MIRAR
+--------------------------------------------------------------------------
+
+  - "Por que el listado de consultas no trae los servicios ni los productos?"
+    Porque seria un N+1 caro en una lista. El listado es liviano y los
+    servicios/productos se cargan solo al abrir el detalle
+    (ObtenerPorCodigoAsync en Pawpaws-Consulta/Services/ConsultaService.cs).
+
+  - "Borrado fisico o logico?" Rescatistas, veterinarios, servicios y
+    productos usan BORRADO LOGICO (activo = false) para no romper referencias
+    historicas. Los animales si se borran fisicamente, y al hacerlo se borran
+    en cascada sus consultas (EliminarConsultaCompletaAsync).
+
+  - "Y los datos huerfanos en los reportes?" Se resuelven los nombres a
+    prueba de huerfanos: si una consulta apunta a un veterinario dado de baja
+    se muestra "(dado de baja)", y si ya no existe, "(eliminado)", nunca un
+    GUID suelto. Ver ResolverNombresVetAsync / ResolverNombresAnimalAsync en
+    Pawpaws-Reportes/Services/ReporteService.cs.
+
+  - "Reglas de negocio?" Por ejemplo: una consulta no puede nacer
+    "Completada"; un animal adoptado solo puede pasar a "Devuelto al refugio"
+    (no directo a Disponible); no se permiten productos con nombre repetido;
+    la fecha de ingreso de un animal no puede ser futura.
+
+  - "Paginacion?" Los listados del backend estan paginados
+    (?pagina=&tamano=); el front pide la primera pagina con tamano alto. Ver
+    apiList en Pawpaws-Front/src/api/client.ts.
+
+
+--------------------------------------------------------------------------
+10. RESUMEN DE "QUIEN LLAMA A QUIEN"
+--------------------------------------------------------------------------
+
+  - Front -> Animales: rescatistas, organizaciones, animales y sus
+    historiales.
+  - Front -> Consulta: veterinarios, servicios, productos, consultas y gastos.
+  - Front -> Reportes: todos los reportes.
+  - Consulta -> Animales (HTTP): solo para validar el animal y su estado al
+    crear una consulta.
+  - Reportes -> Animales y Reportes -> Consulta (HTTP): para armar cada
+    reporte combinando datos.
+  - Ningun servicio entra a la base de datos de otro: siempre por la API REST,
+    con el token JWT reenviado.
+
+
+==========================================================================
+11. COMO VER LAS CONSULTAS (QUERIES) QUE SE HACEN A CASSANDRA
+==========================================================================
+
+Cassandra corre en dos contenedores Docker (ver docker-compose.yml):
+  - papaws-cassandra-animales  -> keyspace papaws_animales  (puerto host 9042)
+  - papaws-cassandra-consulta  -> keyspace papaws_consulta  (puerto host 9142)
+
+Importante: Cassandra NO escribe en un log cada query por defecto (a
+diferencia de MySQL). Para "verlas" hay que activar TRACING. Hay tres formas,
+de la mas simple a la mas completa.
+
+
+FORMA A - Ver una query puntual con TRACING ON (en cqlsh)
+---------------------------------------------------------
+Abris cqlsh dentro del contenedor y activas el rastreo; cada SELECT/INSERT
+que ejecutes mostrara su traza (que nodos toco, tiempos, etc.):
+
+  docker exec -it papaws-cassandra-animales cqlsh
+
+Y dentro de cqlsh:
+
+  USE papaws_animales;
+  TRACING ON;
+  SELECT * FROM animales_by_rescatista WHERE rescatista_id = <un-uuid>;
+
+Para el otro servicio es igual pero con su contenedor y keyspace:
+
+  docker exec -it papaws-cassandra-consulta cqlsh
+  USE papaws_consulta;
+  TRACING ON;
+  SELECT * FROM consulta_codigos_by_animal WHERE animal_id = <un-uuid>;
+
+
+FORMA B - Capturar TODAS las queries que hace la app (la que mas sirve)
+-----------------------------------------------------------------------
+Cassandra puede rastrear un porcentaje de TODAS las queries que recibe y
+guardarlas en la tabla del sistema system_traces.sessions. Pasos:
+
+1) Activar el rastreo al 100% (1 = todas). Hacelo en el contenedor que te
+   interese:
+
+   docker exec papaws-cassandra-animales nodetool settraceprobability 1
+
+2) Usa la aplicacion normalmente (entra a una ficha, genera un reporte, etc.)
+   para que se disparen las queries.
+
+3) Leer las queries rastreadas. La columna "parameters" incluye el texto CQL
+   real que se ejecuto:
+
+   docker exec papaws-cassandra-animales cqlsh -e "SELECT started_at, request, parameters FROM system_traces.sessions LIMIT 50;"
+
+   (si queres ver el paso a paso de una sesion concreta:
+    SELECT activity, source, source_elapsed FROM system_traces.events
+    WHERE session_id = <session-id>; )
+
+4) MUY IMPORTANTE: apagar el rastreo cuando termines, porque al 100% es caro
+   y llena disco:
+
+   docker exec papaws-cassandra-animales nodetool settraceprobability 0
+
+Para el servicio de Consulta es lo mismo cambiando el contenedor a
+papaws-cassandra-consulta.
+
+
+FORMA C - Inspeccionar datos directamente (sin tracing)
+-------------------------------------------------------
+Si solo queres ver QUE HAY en una tabla (no las queries en si), corres CQL
+directo. Util para demostrar la desnormalizacion en la defensa:
+
+  docker exec papaws-cassandra-animales cqlsh -e "SELECT * FROM papaws_animales.animales_by_rescatista LIMIT 20;"
+  docker exec papaws-cassandra-animales cqlsh -e "DESCRIBE KEYSPACE papaws_animales;"
+  docker exec papaws-cassandra-consulta cqlsh -e "SELECT * FROM papaws_consulta.consultas_by_codigo LIMIT 20;"
+
+DESCRIBE KEYSPACE te muestra TODAS las tablas con sus claves de particion y
+clustering: perfecto para explicarle al ingeniero el modelado query-first.
+
+
+FORMA D - Ver los logs del contenedor / de la app
+--------------------------------------------------
+Para ver que esta haciendo cada pieza (no las queries CQL, pero si la
+actividad):
+
+  docker logs -f papaws-cassandra-animales      (log del nodo Cassandra)
+  docker logs -f papaws-animales                 (log del microservicio .NET)
+  docker logs -f papaws-consulta
+  docker logs -f papaws-reportes
+
+En el log del microservicio .NET se ven los requests HTTP que llegan; cruzado
+con la Forma B, podes mostrar el camino completo: request HTTP -> servicio ->
+query a Cassandra.
+
+
+RESUMEN RAPIDO (lo minimo para la demo)
+---------------------------------------
+  docker exec papaws-cassandra-animales nodetool settraceprobability 1
+  (usar la app)
+  docker exec papaws-cassandra-animales cqlsh -e "SELECT started_at, parameters FROM system_traces.sessions LIMIT 30;"
+  docker exec papaws-cassandra-animales nodetool settraceprobability 0

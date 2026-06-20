@@ -152,7 +152,7 @@ export function Dashboard() {
             </p>
             <div className="flex flex-wrap gap-2 mt-5">
               <Link
-                to="/consultas"
+                to="/consultas?vista=agenda"
                 className="inline-flex items-center gap-2 bg-white text-moss-800 font-semibold rounded-full px-5 py-2.5 text-sm hover:bg-clay-50 transition-colors"
               >
                 Ver agenda <ArrowRight size={15} />
@@ -277,7 +277,7 @@ export function Dashboard() {
                   </h2>
                 </div>
                 <Link
-                  to="/consultas"
+                  to="/consultas?vista=agenda"
                   className="text-sm text-moss-700 font-semibold hover:underline flex items-center gap-1"
                 >
                   Agenda <ArrowRight size={14} />
